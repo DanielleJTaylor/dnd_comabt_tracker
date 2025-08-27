@@ -1,0 +1,32 @@
+#app-container {
+    display: flex;           /* side-by-side layout */
+    width: 100vw;            /* full screen width */
+    height: 100vh;           /* full screen height */
+}
+
+#left-dashboard {
+    width: 0;                /* starts collapsed */
+    flex-shrink: 0;          /* don’t let it shrink further */
+    display: flex;
+    background-color: #2c2c2c;
+    border-right: 2px solid #00bfa6;
+      flex-direction: column;   /* header + controls + list stack */
+      
+}
+
+#right-tracker{
+    width: 100%;             /* takes all space when dashboard is hidden */
+    flex-grow: 1;
+    display: flex;
+    background-color: lightblue;    /* blue-ish so you can see it */
+    flex-direction: column;
+}
+
+/* When dashboard is visible */
+#app-container.dashboard-visible #dashboard-section {
+  width: 45%;              /* expanded size */
+}
+
+#app-container.dashboard-visible #tracker-section {
+  width: 55%;              /* shrinks accordingly */
+}
