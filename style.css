@@ -1,3 +1,13 @@
+/* Reset edge spacing so header hits the top edge */
+html, body {
+  height: 100%;
+}
+body {
+  margin: 0;
+}
+
+
+
 #app-container {
     display: flex;           /* side-by-side layout */
     width: 100vw;            /* full screen width */
@@ -14,7 +24,14 @@
       
 }
 
-#right-tracker{
+#dashboard-header {
+  background-color: #444;     /* dark strip for the header */
+  display: flex;
+  justify-content: space-between;
+  align-content: center;
+}
+
+#right-tracker {
     width: 100%;             /* takes all space when dashboard is hidden */
     flex-grow: 1;
     display: flex;
@@ -23,10 +40,27 @@
 }
 
 /* When dashboard is visible */
-#app-container.dashboard-visible #dashboard-section {
+#app-container.dashboard-visible #left-dashboard {
   width: 45%;              /* expanded size */
 }
 
-#app-container.dashboard-visible #tracker-section {
+#app-container.dashboard-visible #right-tracker {
   width: 55%;              /* shrinks accordingly */
+}
+
+.tracker-header {
+  background-color: #f6e4c1;  /* parchment light theme */
+  display: flex;
+  align-items: center;
+  justify-content: space-between; /* spreads left (title) and right (controls) */
+  padding: 0.1rem 0.1rem;
+}
+
+.tracker-header {
+  font-size: 1.6rem;
+  margin: 0;                 /* remove default top/bottom margins */
+}
+
+.tracker-header .theme-switch {
+  margin-right: 1rem;
 }

@@ -4,37 +4,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet"  href="style.css">
+    <script src="scripts/app.js" defer></script>
     <title>Document</title>
 </head>
 <body>
     <!-- Conatiner for entire page -->
     <!-- Add class "dashboard-visible" to #app-container to expand the left panel (≈45%) and shrink the right panel (≈55%) -->
-    <div id="app-container" class="dashboard-visible ">
+    <div id="app-container">
 
         <!-- LEFT: Dashboards panel -->
         <section id="left-dashboard">
-            <h3>📁 Dashboards</h3>
+            <div id="dashboard-header">
+                <h3>📁 Dashboards</h3>
+               <button id="closeDashboardBtn">✖</button>
             </div>
             <div class="dashboard-controls">
                 <button id="newDashboardBtn">➕ New Dashboard</button>
                 <button id="newFolderBtn">📁 New Folder</button>
             </div>
+            
             <!-- Optional: list container goes here -->
              <div id="dashboard-list-container" class="dashboard-list"></div>
         </section>
 
+
+
         <!-- RIGHT: Tracker panel -->
         <section id="right-tracker">
 
-        <label class="theme-switch">
-            <input type="checkbox" id="themeToggle" />
-            <span class="slider"></span>
-        </label>
-        <div class="button-group">
-          <button id="addCombatantBtn">+ Add Combatant</button>
-          <button id="addGroupBtn">+ Add Group</button>
-          <button id="startEncounterBtn">▶ Start Encounter</button>
-        </div>
+        <header class="tracker-header">
+            <h1>🧝‍♂️ D&D Combat Tracker</h1>
+            <label class="theme-switch">
+                <input type="checkbox" id="themeToggle" />
+                <span class="slider"></span>
+            </label>
+            <div class="button-group">
+            <button id="addCombatantBtn">+ Add Combatant</button>
+            <button id="addGroupBtn">+ Add Group</button>
+            <button id="startEncounterBtn">▶ Start Encounter</button>
+            </div>
+        </header>
 
         <main class="tracker-wrapper">
             <div class="controls-row">
