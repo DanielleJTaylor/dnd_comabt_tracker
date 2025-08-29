@@ -59,7 +59,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between; /* spreads left (title) and right (controls) */
-  height: 8vh;
+  height: 7vh;
   padding: 1rem 0;
 }
 
