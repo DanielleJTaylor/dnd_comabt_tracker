@@ -1,0 +1,36 @@
+body {
+  margin: 0;
+  font-family: 'Segoe UI', sans-serif;
+  background-color: #fdf6e3; /* parchment */
+  color: #4a3c1a;
+  text-align: center;
+}
+
+main {
+  margin-top: 15vh;
+}
+
+h1 {
+  font-size: clamp(1.5rem, 2vw + 1rem, 3rem);
+}
+
+.home-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+button {
+  background-color: #7fb069;
+  color: white;
+  border: none;
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #6ca05b;
+}

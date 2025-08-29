@@ -7,7 +7,6 @@ body {
 }
 
 
-
 #app-container {
     display: flex;           /* side-by-side layout */
     width: 100vw;            /* full screen width */
@@ -56,11 +55,13 @@ body {
 
 .tracker-header {
   background-color: #f6e4c1;  /* parchment light theme */
-  display: flex;
+  display: grid;
+  grid-template-columns:  0.25fr 0.5fr auto; /* back | title grows | buttons */
+  column-gap: 0.5rem;    /* small space between back + title */
   align-items: center;
-  justify-content: space-between; /* spreads left (title) and right (controls) */
-  height: 7vh;
-  padding: 1rem 0;
+  justify-content: flex-start; /* keep items close to each other */
+  height: 7vh;       /* or any fixed height you want */
+  padding: 0;         /* remove padding so button can truly touch edges */
 }
 
 
@@ -80,11 +81,19 @@ body {
   font-size: clamp(0.50rem, 0.7rem + 0.25rem, 1.2rem);
 }
 
+/* Push the controls to the far right */
+.tracker-header .button-group {
+  justify-self: end;             /* pushes the group to the right edge */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* Tracker Title */
 .tracker-header h1 {
+  margin: 0;                     /* remove default spacing */
   font-size: clamp(1rem, 2vw + 0.5rem, 2rem);
   font-weight: bold;
-  margin: 0;
   font-family: "Georgia", "Times New Roman", serif;
 }
 
@@ -114,4 +123,14 @@ body {
 .controls-row button:hover {
   background-color: #6ca05b;
   cursor: pointer;
+}
+
+.tracker-header .back-btn {
+  align-self: stretch;           /* key: makes it as tall as the header */
+  display: flex;                 /* center its text vertically */
+  align-items: center;
+  background-color: #7fb069;  /* green parchment tone */
+  color: white;               /* button text/icon color */
+  border: none;               /* remove default border */
+  padding: 0 1rem;            /* left-right padding */
 }
