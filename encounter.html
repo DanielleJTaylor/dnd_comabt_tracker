@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet"  href="css/tracker.css">
+    <link rel="stylesheet"  href="css/combat-table.css">
     <script src="scripts/app.js" defer></script>
+    <script src="scripts/combat_tracker.js" defer></script>
     <title>DnD Sidekick</title>
     <link rel="icon" type="image/png" href="images/icon.png">
 
@@ -59,6 +61,7 @@
         <main class="tracker-wrapper">
             <div class="controls-row">
             <button id="seeDashboardsBtn">📋 See Dashboards</button>
+             <button id="historyLogBtn">📜 History Log</button>
             <span id="roundCounter">Round: 1</span>
             <button>⬅ Previous Turn</button>
             <div id="currentTurnDisplay">🟢 Current Turn: <strong>None</strong></div>
@@ -68,22 +71,24 @@
             <button>🗑️ Clear</button>
             </div>
 
-  <div class="table-scroll-container">
-              <div id="combatTable" class="tracker-table">
-                <div class="tracker-table-header">
-                    <div class="cell image-cell">[img]</div>
-                    <div class="cell">[init]</div>
-                    <div class="cell">[name]</div>
-                    <div class="cell">[ac]</div>
-                    <div class="cell">[hp/max]</div>
-                    <div class="cell">[tempHp]</div>
-                    <div class="cell">[status tags]</div>
-                    <div class="cell">[role]</div>
-                    <div class="cell">[buttons/actions]</div>
-                  </div>
-                <div id="combatantList"></div>
-              </div>
-          </div>
+        <div class="table-scroll-container">
+        <div id="tracker-table" class="tracker-table">
+            <div class="tracker-table-header">
+                <div class="cell image-cell">[img]</div>
+                <div class="cell">[init]</div>
+                <div class="cell">[name]</div>
+                <div class="cell">[ac]</div>
+                <div class="cell">[hp/max]</div>
+                <div class="cell">[tempHp]</div>
+                <div class="cell">[status tags]</div>
+                <div class="cell">[role]</div>
+                <div class="cell">[buttons/actions]</div>
+                <div class="cell">[dashboard link]</div>
+            </div>
+            <!-- This is where the combatant rows will be rendered -->
+            <div id="combatant-list-body"></div>
+        </div>
+        </div>
         </main>
     </section>
   </div>
@@ -106,6 +111,5 @@
     </div>
   </div>
 
-</div>
 </body>
 </html>
