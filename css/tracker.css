@@ -19,7 +19,7 @@ body {
     display: flex;
     background-color: #2c2c2c;
     border-right: 2px solid #00bfa6;
-      flex-direction: column;   /* header + controls + list stack */
+    flex-direction: column;   /* header + controls + list stack */
       
 }
 
@@ -55,13 +55,29 @@ body {
 
 .tracker-header {
   background-color: #f6e4c1;  /* parchment light theme */
-  display: grid;
-  grid-template-columns:  0.25fr 0.5fr auto; /* back | title grows | buttons */
-  column-gap: 0.5rem;    /* small space between back + title */
-  align-items: center;
-  justify-content: flex-start; /* keep items close to each other */
-  height: 7vh;       /* or any fixed height you want */
+  display: flex;               /* use flexbox */
+  flex-wrap: wrap;             /* allow items to wrap to next line */
+  align-items: stretch;   /* CHANGED: allow children to stretch vertically */
+  justify-content: space-between;   /* This is the key property. It puts maximum space between its children (the left group and the right group). */
+  gap: 0.5rem;                 /* spacing between children */
+  height: 8vh;       /* or any fixed height you want */
   padding: 0;         /* remove padding so button can truly touch edges */
+}
+
+/* Make the right controls act like a block that stays together */
+.header-left-group {
+  display: flex;
+  flex-wrap: wrap;   /* let theme toggle + buttons wrap if needed */
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Make the right controls act like a block that stays together */
+.header-right-controls {
+  display: flex;
+  flex-wrap: wrap;   /* let theme toggle + buttons wrap if needed */
+  align-items: center;
+  gap: 0.3rem;
 }
 
 
@@ -86,11 +102,11 @@ body {
   justify-self: end;             /* pushes the group to the right edge */
   display: flex;
   align-items: center;
-  gap: 8px;
 }
 
 /* Tracker Title */
 .tracker-header h1 {
+  margin-right:auto;
   margin: 0;                     /* remove default spacing */
   font-size: clamp(1rem, 2vw + 0.5rem, 2rem);
   font-weight: bold;
@@ -109,6 +125,7 @@ body {
   border-bottom: 2px solid #d0bfa2; /* bottom border */
   border-radius: 6px 6px 0 0;       /* rounded top corners */
   padding: 0.5rem 1rem;             /* add breathing room */
+  height: 4vh;
 }
 
 /* Controls inside row */
@@ -126,7 +143,7 @@ body {
 }
 
 .tracker-header .back-btn {
-  align-self: stretch;           /* key: makes it as tall as the header */
+  height: 100%;          /* key: makes it as tall as the header */
   display: flex;                 /* center its text vertically */
   align-items: center;
   background-color: #7fb069;  /* green parchment tone */

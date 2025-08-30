@@ -35,17 +35,25 @@
         <section id="right-tracker">
 
         <header class="tracker-header">
-            <button class="back-btn" onclick="history.back()">⬅ Back</button>
-            <h1>🧝‍♂️ D&D Combat Tracker</h1>
-            <label class="theme-switch">
+            <!-- GROUP 1: Items for the left side -->
+            <div class="header-left-group">
+                <button class="back-btn" onclick="history.back()">⬅ Back</button>
+                <h1>🧝‍♂️ D&D Combat Tracker</h1>
+            </div>
+
+            <!-- ADD this wrapper around the theme switch + button group -->
+            <div class="header-right-controls">        <!-- ← ADD -->
+                <label class="theme-switch">
                 <input type="checkbox" id="themeToggle" />
                 <span class="slider"></span>
-            </label>
+                </label>
+
             <div class="button-group">
             <button id="addCombatantBtn">+ Add Combatant</button>
             <button id="addGroupBtn">+ Add Group</button>
-            <button id="startEncounterBtn">▶ Start Encounter</button>
+            <button id="startEncounterBtn">▶ Reset Encounter</button>
             </div>
+            </div> 
         </header>
 
         <main class="tracker-wrapper">
@@ -60,25 +68,43 @@
             <button>🗑️ Clear</button>
             </div>
 
-            <div class="table-scroll-container">
-            <div class="tracker-table">
+  <div class="table-scroll-container">
+              <div id="combatTable" class="tracker-table">
                 <div class="tracker-table-header">
-                <div class="cell image-cell">[img]</div>
-                <div class="cell">[init]</div>
-                <div class="cell">[name]</div>
-                <div class="cell">[ac]</div>
-                <div class="cell">[tempHp]</div>
-                <div class="cell">[current hp]</div>
-                <div class="cell">[max hp]</div>
-                <div class="cell">[status]</div>
-                <div class="cell">[role]</div>
-                <div class="cell">[actions]</div>
-                </div>
+                    <div class="cell image-cell">[img]</div>
+                    <div class="cell">[init]</div>
+                    <div class="cell">[name]</div>
+                    <div class="cell">[ac]</div>
+                    <div class="cell">[hp/max]</div>
+                    <div class="cell">[tempHp]</div>
+                    <div class="cell">[status tags]</div>
+                    <div class="cell">[role]</div>
+                    <div class="cell">[buttons/actions]</div>
+                  </div>
                 <div id="combatantList"></div>
-            </div>
-            </div>
+              </div>
+          </div>
         </main>
     </section>
+  </div>
+
+  <section id="trackerContainer" class="tracker-log-panel"> 
+    <div id="historyLogContent" class="log-content"></div> 
+  </section>
+  
+  <div id="hpPopup" class="popup hidden"> 
+    <div class="popup-content">
+        <h3>Adjust HP</h3> 
+        <div class="hp-popup-field"><label for="healingInput">Healing:</label><input type="number" id="healingInput" min="0" placeholder="e.g., 10" /></div> 
+        <div class="hp-popup-field"><label for="damageInput">Damage:</label><input type="number" id="damageInput" min="0" placeholder="e.g., 15" /></div> 
+        <div class="hp-popup-field"><label for="addTempHpInput">Add Temp HP:</label><input type="number"id="addTempHpInput" min="0" placeholder="e.g., 5" /></div>
+        <div class="hp-popup-field">
+            <label for="tempHpDurationInput">Duration (rounds):</label>
+            <input type="number" id="tempHpDurationInput" min="1" placeholder="Infinity" />
+        </div>
+        <button onclick="applyHpChange()">Apply</button> 
+    </div>
+  </div>
 
 </div>
 </body>
