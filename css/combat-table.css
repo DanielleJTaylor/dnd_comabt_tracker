@@ -1,4 +1,49 @@
-/* css/combat-tracker.css */
+/* css/combat-table.css */
+
+/*
+  This container wraps your table. We use it to control position and overflow.
+*/
+.table-scroll-container {
+  flex: 1 1 auto;          /* CRUCIAL: Allows this container to grow and fill the remaining vertical space */
+  display: flex;           /* Use flexbox to easily center the table inside it */
+  justify-content: center; /* Horizontally centers the .tracker-table */
+  overflow-y: auto;        /* Allows the list of combatants to scroll VERTICALLY if it gets long */
+  padding: 1rem 0;         /* Adds some breathing room at the top and bottom */
+}
+
+/*
+  These styles apply to the table itself.
+*/
+.tracker-table {
+  width: 90%;              /* As requested: the table takes up 70% of its container's width */
+  min-width: 980px;        /* Prevents the table from getting too squished on smaller screens */
+  max-width: 1400px;       /* Prevents the table from becoming overly wide on very large monitors */
+  
+  /* This ensures the table's background doesn't stretch and interfere with centering */
+  height: min-content;     
+}
+
+
+.tracker-table-header,
+.tracker-table-row {
+  display: grid;
+  grid-template-columns:
+    /* match header + row: 10 columns */
+    minmax(150px, 2.4fr)     /* [img] */
+    minmax(56px, 0.7fr)     /* [init] */
+    minmax(160px, 2fr)      /* [name] */
+    minmax(60px, 0.7fr)     /* [ac] */
+    minmax(120px, 1.1fr)    /* [hp/max] */
+    minmax(70px, 0.8fr)     /* [tempHp] */
+    minmax(160px, 1.6fr)    /* [status tags] */
+    minmax(84px, 0.4fr)     /* [role] */
+    minmax(150px, 1.2fr)    /* [buttons/actions] */
+    minmax(110px, 0.5fr);     /* [dashboard link] */
+
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+}
 
 
 #combatantList {
@@ -45,30 +90,68 @@
 
 
 /* Style for the bulk actions bar */
+/* BULK ACTIONS: Grid that never overflows horizontally */
 .bulk-actions-bar {
-  display: flex;
-  justify-content: space-around;
+  display: grid;
+  grid-template-columns: auto auto 1fr auto; /* checkbox | counter | spacer | actions */
   align-items: center;
-  padding: 0.2rem;
-  background-color: #f0ddb7; /* Parchment style */
+  gap: 0.75rem 1rem;
+
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.75rem 1rem;
+
+  background-color: #f6e4c1;
   border-top: 2px solid #d0bfa2;
-  border-radius: 6px;
-  gap: 1rem;
+  border-bottom: 2px solid #d0bfa2;
+
+  /* Show/Hide without squashing the height */
+  display: none;            /* hidden by default */
 }
 
-.bulk-actions-bar button {
-  background-color: #7fb069;
-  color: white;
-  border: 1px solid #6ca05b;
-  padding: 0.5rem;
-  border-radius: 4px;
+.bulk-actions-bar.visible {
+  display: grid;            /* show when you add .visible */
+}
+
+/* Left pieces */
+.bulk-actions-bar .select-all input {
+  transform: scale(1.2);
+  vertical-align: middle;
   cursor: pointer;
 }
+#selectionCounter { font-weight: 700; }
 
-.bulk-actions-bar button:hover {
-  background-color: #6ca05b;
+/* Right button group (kept as a single grid item) */
+.bulk-actions-actions {
+  display: grid;
+  grid-auto-flow: column;
+  gap: 0.5rem;
+  /* keep inside container on tight screens */
+  max-width: 100%;
+  overflow-x: auto;
 }
 
-#selectionCounter {
-  font-weight: bold;
+.bulk-actions-actions button {
+  white-space: nowrap;                 /* prevent multi-line buttons */
+  background-color: #7fb069;
+  color: #fff;
+  border: 1px solid #6ca05b;
+  border-radius: 4px;
+  padding: 0.45rem 0.8rem;
+  font-size: clamp(0.7rem, 0.8vw + 0.3rem, 1rem);
+  cursor: pointer;
+}
+.bulk-actions-actions button:hover { background-color: #6ca05b; }
+
+/* Responsive: stack on narrow widths */
+@media (max-width: 800px) {
+  .bulk-actions-bar {
+    grid-template-columns: 1fr;       /* one column */
+    row-gap: 0.5rem;
+  }
+  .bulk-actions-actions {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
+    overflow-x: visible;
+  }
 }

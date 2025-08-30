@@ -5,24 +5,23 @@
 (() => {
 
     // ======= STATE =======
-    let combatants = [];  // List of all combatants in the tracker
+    let combatants = [];  // List of combatants
+
+    // ✅ Expose so group-selector.js can read it
+    window.CombatState = { combatants };
+
     let round = 1;        // Current round of combat
     let currentTurnIndex = 0;  // The index of the current combatant's turn
-    let historyLog = [];  // Log of actions taken in combat
 
     // ======= DOM ELEMENT SELECTIONS =======
     // It's good practice to select all your needed elements at the top
     const $ = (sel, root = document) => root.querySelector(sel);
     const combatantListBody = $('#combatant-list-body'); // CORRECT: Select the correct body element
-    const historyLogBtn = $('#historyLogBtn');
     const trackerContainer = $('#trackerContainer');
     const addCombatantBtn = $('#addCombatantBtn');
 
 
-
-
     // ======= FUNCTIONS =======
-
 
 
     /**
@@ -63,7 +62,15 @@
             `;
             combatantListBody.appendChild(row);
         });
+
+        // ✅ After rows are built, sync checkboxes & selection state
+        GroupSelector?.syncRowCheckboxes?.();
     }
+
+
+    // Simple unique id
+    const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+
 
     /**
      * Adds a new combatant with default values to the state.
@@ -81,47 +88,16 @@
             imageUrl: ''
         };
         combatants.unshift(c);
-        log(`➕ Added ${c.name}.`);
+        HistoryLog.log(`➕ Added ${c.name}.`);   // ✅ use HistoryLog
+
         render(); // Re-render the list to show the new addition
     }
 
 
 
-
-
-
-    /**
-     * Adds a message to the history log array.
-     * @param {string} message The message to log.
-     */
-    function log(message) {
-        const timestamp = new Date().toLocaleTimeString();
-        historyLog.unshift(`[${timestamp}] ${message}`); // Adds to the start of the array
-        renderLog();
-    }
-
-    /**
-     * Renders the history log to its panel in the UI.
-     */
-    function renderLog() {
-        const logContent = $('#historyLogContent');
-        logContent.innerHTML = historyLog.join('<br>');
-    }
-    
-    /**
-     * Generates a simple unique ID.
-     */
-    const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-
-
     // ======= EVENT LISTENERS =======
-
-    // Listen for clicks on the "Add Combatant" button
     addCombatantBtn.addEventListener('click', addDefaultCombatant);
 
-    // Listen for clicks on the "History Log" button
-    historyLogBtn.addEventListener('click', () => {
-        trackerContainer.classList.toggle('visible');
-    });
+
 
     })();
