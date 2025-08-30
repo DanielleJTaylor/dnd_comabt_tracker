@@ -19,6 +19,8 @@
     const addCombatantBtn = $('#addCombatantBtn');
 
 
+
+
     // ======= FUNCTIONS =======
 
 
@@ -82,6 +84,8 @@
         log(`➕ Added ${c.name}.`);
         render(); // Re-render the list to show the new addition
     }
+
+
 
 
 

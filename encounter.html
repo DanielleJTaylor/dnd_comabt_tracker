@@ -7,6 +7,8 @@
     <link rel="stylesheet"  href="css/combat-table.css">
     <script src="scripts/app.js" defer></script>
     <script src="scripts/combat_tracker.js" defer></script>
+    <script src="scripts/history-log.js" defer></script>
+    <script src="scripts/group-selector.js" defer></script>
     <title>DnD Sidekick</title>
     <link rel="icon" type="image/png" href="images/icon.png">
 
@@ -61,6 +63,7 @@
         <main class="tracker-wrapper">
             <div class="controls-row">
             <button id="seeDashboardsBtn">📋 See Dashboards</button>
+            <button id="lockGroupSelectionBtn">🔒 Lock Group Selection</button>
              <button id="historyLogBtn">📜 History Log</button>
             <span id="roundCounter">Round: 1</span>
             <button>⬅ Previous Turn</button>
@@ -70,6 +73,15 @@
             <button>📂 Load</button>
             <button>🗑️ Clear</button>
             </div>
+
+        <!-- Bulk Actions Bar (at the top or bottom of combatants) -->
+        <div id="bulkActionsBar" class="bulk-actions-bar">
+            <input type="checkbox" id="selectAllCheckbox"> Select All
+            <span id="selectionCounter">0 selected</span>
+            <button id="bulkDamageHealBtn">Damage / Heal Selected</button>
+            <button id="bulkDeleteBtn">Delete Selected</button>
+            <button id="bulkGroupBtn">Move to Group</button>
+        </div>
 
         <div class="table-scroll-container">
         <div id="tracker-table" class="tracker-table">

@@ -16,10 +16,18 @@ document.addEventListener("DOMContentLoaded", () => {                         //
   const closeBtn = document.getElementById("closeDashboardBtn");    
 
   seeBtn.addEventListener("click", () => {
-        appContainer.classList.add("dashboard-visible");
+        appContainer.classList.toggle("dashboard-visible");
   });
 
   closeBtn.addEventListener("click", () => {
         appContainer.classList.remove("dashboard-visible");
+
+
+
+
+
+
+        
   });
 });
+
