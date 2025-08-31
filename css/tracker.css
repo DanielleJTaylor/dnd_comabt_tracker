@@ -93,18 +93,32 @@ main.tracker-wrapper {
   align-items: stretch;
 }
 
-
-/* LEFT SIDE (back + title) */
+/* --- LEFT SIDE (back + title) --- */
 .header-left-group {
   display: flex;
-  align-items: center;
-  height: 100%;           /* take full header height */
+  
+  /* KEY FIX #2: Change to center. The parent's stretch handles the height. */
+  align-items: center; 
+  
   gap: 0.75rem;
   min-width: 0;
-  flex: 0 1 auto;   /* shrink first, do not grow */
+  flex: 0 1 auto;
 }
 
-/* Title shrinks with ellipsis */
+/* --- Back button --- */
+.tracker-header .back-btn {
+  background-color: #7fb069;
+  color: white;
+  border: none;
+  
+  /* These are all that's needed now */
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+  flex-shrink: 0; /* Prevents button from shrinking */
+}
+
+/* --- Title shrinks with ellipsis --- */
 .tracker-header h1 {
   margin: 0;
   font-size: clamp(1.2rem, 2vw + 0.5rem, 2.2rem);
@@ -114,23 +128,7 @@ main.tracker-wrapper {
   text-overflow: ellipsis;
 }
 
-/* Back button fills the tracker header vertically */
-.tracker-header .back-btn {
-  background-color: #7fb069;
-  color: white;
-  border: none;
-  height: 100%;           /* take full header height */
-
-  /* Make it fill the header height */
-  align-self: stretch;   /* ✅ fills parent's height */
-  display: flex;         /* center text/icon inside */
-  align-items: center;
-  justify-content: center;
-
-  padding: 0 1rem;       /* left/right padding */
-  flex-shrink: 0; /* Prevents button from shrinking */
-}
-
+/* (The rest of your header CSS for the right side can remain the same) */
 
 /* RIGHT CONTROLS (⭐ most important — gets max space) */
 .header-right-controls {
@@ -157,7 +155,7 @@ main.tracker-wrapper {
   cursor: pointer;
   padding: 6px 12px;
   border-radius: 4px;
-  font-size: clamp(0.72rem, 1vw + .2rem, 1rem);
+  font-size: clamp(0.4rem, 1vw + .2rem, 1rem);
   white-space: nowrap;
   transition: background-color .2s ease;
 }
@@ -240,23 +238,23 @@ main.tracker-wrapper {
 
 /* ========= HEADER RIGHT CONTROLS ========= */
 /* When the header’s right block gets narrower, tighten padding */
-@container (max-width: 860px) {
+@container (max-width: 960px) {
   .header-right-controls .btn { padding: .3rem .5rem; }
 }
 
 /* Hide labels (icon-only) when it’s really tight */
-@container (max-width: 730px) {
+@container (max-width: 830px) {
   .header-right-controls .btn .label { display: none; }
 }
 
 /* ========= CONTROLS ROW ========= */
 /* Tighten earlier for controls row since it has more items */
-@container (max-width: 1000px) {
+@container (max-width: 1100px) {
   .controls-row .btn { padding: .28rem .48rem; }
 }
 
 /* Go icon-only when it’s cramped */
-@container (max-width: 820px) {
+@container (max-width: 1100px) {
   .controls-row .btn .label { display: none; }
 }
 
@@ -290,9 +288,8 @@ main.tracker-wrapper {
   cursor: pointer;
   transition: background-color .2s ease;
 }
+
 .controls-row button:hover { background-color: #6ca05b; }
-
-
 
 
 .tracker-header .back-btn {

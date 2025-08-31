@@ -3,25 +3,43 @@
 /*
   This container wraps your table. We use it to control position and overflow.
 */
+/* 1) The wrapper that holds the table */
+
+/* --- 1. The Container that Manages Scrolling and Centering --- */
 .table-scroll-container {
-  flex: 1 1 auto;          /* CRUCIAL: Allows this container to grow and fill the remaining vertical space */
-  display: flex;           /* Use flexbox to easily center the table inside it */
-  justify-content: center; /* Horizontally centers the .tracker-table */
-  overflow-y: auto;        /* Allows the list of combatants to scroll VERTICALLY if it gets long */
-  padding: 1rem 0;         /* Adds some breathing room at the top and bottom */
+  flex-grow: 1; /* Allows the container to fill the available vertical space */
+  display: flex; /* Use flexbox to easily center the table */
+  justify-content: center; /* Horizontally center the table within this container */
+
+  /* CRUCIAL: This enables the horizontal scrollbar when the table is wider than the container */
+  overflow-x: auto;
+  overflow-y: auto; /* Allow for vertical scrolling of the combatant list */
+
+  /* Add some breathing room around the table */
+  padding: 1rem 2rem;
 }
 
-/*
-  These styles apply to the table itself.
-*/
+
+/* --- 2. The Table Itself (Responsive Sizing) --- */
 .tracker-table {
-  width: 90%;              /* As requested: the table takes up 70% of its container's width */
-  min-width: 980px;        /* Prevents the table from getting too squished on smaller screens */
-  max-width: 1400px;       /* Prevents the table from becoming overly wide on very large monitors */
+  /* This is the core logic for responsive sizing:
+     - It will try to be 95% of its container's width.
+     - It will never get smaller than 980px.
+     - It will never get larger than 1600px.
+  */
+  width: 90%;
+  min-width: 980px;
+  max-width: 3000px;
   
-  /* This ensures the table's background doesn't stretch and interfere with centering */
-  height: min-content;     
+  /* Ensures the table doesn't have extra empty height */
+  height: min-content;
+
+  /* Add a border and some styling to match your example image */
+  border: 1px solid #d0bfa2;
+  border-radius: 8px;
+  overflow: hidden; /* Keeps rows contained within the rounded corners */
 }
+
 
 
 .tracker-table-header,
