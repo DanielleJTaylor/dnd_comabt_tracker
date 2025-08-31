@@ -77,22 +77,28 @@ main.tracker-wrapper {
 /* css/tracker.css */
 
 /* === HEADER (Final, Cleaned Version) === */
-/* === HEADER === */
+/* === HEADER (Final, Corrected for Button Height) === */
 .tracker-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
   background-color: #f6e4c1;
   border-bottom: 2px solid #d0bfa2;
   gap: 1rem;
-  padding: 0.5rem 0;
-  min-width: 0; /* allow children to shrink */
+  
+  /* Set a fixed height for children to align to */
+  height: 8vh;
+  min-height: 50px; /* Ensure it's always a usable height */
+
+  /* KEY FIX #1: Align items to stretch by default */
+  align-items: stretch;
 }
+
 
 /* LEFT SIDE (back + title) */
 .header-left-group {
   display: flex;
   align-items: center;
+  height: 100%;           /* take full header height */
   gap: 0.75rem;
   min-width: 0;
   flex: 0 1 auto;   /* shrink first, do not grow */
@@ -108,15 +114,23 @@ main.tracker-wrapper {
   text-overflow: ellipsis;
 }
 
-/* BACK BUTTON stays fixed size */
+/* Back button fills the tracker header vertically */
 .tracker-header .back-btn {
   background-color: #7fb069;
   color: white;
   border: none;
-  align-self: stretch;
-  padding: 0 1rem;
-  flex: 0 0 auto;
+  height: 100%;           /* take full header height */
+
+  /* Make it fill the header height */
+  align-self: stretch;   /* ✅ fills parent's height */
+  display: flex;         /* center text/icon inside */
+  align-items: center;
+  justify-content: center;
+
+  padding: 0 1rem;       /* left/right padding */
+  flex-shrink: 0; /* Prevents button from shrinking */
 }
+
 
 /* RIGHT CONTROLS (⭐ most important — gets max space) */
 .header-right-controls {
@@ -147,6 +161,7 @@ main.tracker-wrapper {
   white-space: nowrap;
   transition: background-color .2s ease;
 }
+
 .button-group button:hover {
   background-color: #6ca05b;
 }
@@ -183,7 +198,7 @@ main.tracker-wrapper {
   justify-content: center;
 
   gap: clamp(0.25rem, 0.8vw, 0.5rem);     /* smaller gaps on small screens */
-  padding: clamp(0.3rem, 0.8vw, 0.6rem) clamp(0.5rem, 1vw, 1rem);
+  padding: clamp(0.2rem, 0.7vw, 0.5rem) clamp(0.4rem, 0.9vw, 1rem);
 
   background-color: #f6e4c1;
   border-top: 2px solid #d0bfa2;
