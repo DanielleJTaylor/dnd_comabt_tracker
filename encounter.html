@@ -5,10 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet"  href="css/tracker.css">
     <link rel="stylesheet"  href="css/combat-table.css">
+    <link rel="stylesheet"  href="css/link-sheet.css">
     <script src="scripts/app.js" defer></script>
     <script src="scripts/history-log.js" defer></script>
     <script src="scripts/combat_tracker.js" defer></script>
     <script src="scripts/group-selector.js" defer></script>
+    <script src="scripts/link-sheet.js" defer></script>
     <script src="scripts/dashboard.js" defer></script>
     <title>DnD Sidekick</title>
     <link rel="icon" type="image/png" href="images/icon.png">
@@ -132,6 +134,30 @@
         <button onclick="applyHpChange()">Apply</button> 
     </div>
   </div>
+
+    <!-- ADD THIS AT THE END OF YOUR HTML, BEFORE </body> -->
+
+    <!-- Modal for Linking a Dashboard -->
+    <div id="link-dashboard-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 id="link-modal-title">Link Dashboard</h3>
+            <p>Select a character sheet to link to this combatant.</p>
+            
+            <select id="dashboard-select" class="dashboard-dropdown">
+                <!-- Options will be populated by JavaScript -->
+            </select>
+
+            <div class="modal-actions">
+                <button id="save-link-btn" class="btn-primary">Save Link</button>
+                <button id="close-modal-btn">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add a container for displaying the sheet content in the left panel -->
+    <div id="dashboard-content-display" class="dashboard-content">
+        <!-- Content will be populated by JavaScript -->
+    </div>
 
 </body>
 </html>

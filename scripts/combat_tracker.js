@@ -24,47 +24,57 @@
     // ======= FUNCTIONS =======
 
 
+    // scripts/combat_tracker.js
+
     /**
      * Renders the entire list of combatants to the screen.
      */
     function render() {
-        // Clear the list before re-rendering to prevent duplicates
         combatantListBody.innerHTML = '';
 
-        // If no combatants, show a message and stop
         if (combatants.length === 0) {
-            combatantListBody.innerHTML = '<div class="empty-message">No combatants yet. Click "+ Add Combatant" to begin.</div>';
+            combatantListBody.innerHTML = '<div class="empty-message">No combatants. Click "+ Add Combatant" to begin.</div>';
             return;
         }
 
-        // Loop through each combatant and create an HTML row for it
-        combatants.forEach(c => {
+        combatants.forEach((c, index) => {
             const row = document.createElement('div');
-            row.className = 'tracker-table-row';
-            row.dataset.id = c.id; // Set a data attribute to easily identify which combatant this row belongs to
+            
+            const isCurrentTurn = (index === currentTurnIndex);
+            row.className = `tracker-table-row ${isCurrentTurn ? 'current-turn' : ''}`;
+            row.dataset.id = c.id;
 
-            // Use innerHTML to build the row's content
-            // NOTE: We've added `data-action` attributes for our new event handling method
+            // CORRECTED: This now creates all 10 cells to match your CSS grid
             row.innerHTML = `
-                <div class="cell image-cell"><img src="${c.imageUrl || 'images/icon.png'}" alt="${c.name}"></div>
+                <div class="cell image-cell">
+                    <img src="${c.imageUrl || 'images/icon.png'}" alt="${c.name}">
+                </div>
                 <div class="cell init-cell">${c.init}</div>
                 <div class="cell name-cell">${c.name}</div>
                 <div class="cell ac-cell">${c.ac}</div>
-                <div class="cell hp-cell">${c.hp} / ${c.maxHp}</div>
-                <div class="cell temp-hp-cell">0</div>
-                <div class="cell status-cell"></div>
+                <div class="cell hp-cell">
+                    <span class="hp-heart">❤️</span>
+                    <span>${c.hp} / ${c.maxHp}</span>
+                </div>
+                <div class="cell temp-hp-cell">${c.tempHp || 0}</div>
+                <div class="cell status-cell">
+                    <button class="btn-add-status">+ Add</button>
+                </div>
                 <div class="cell role-cell">${c.role.toUpperCase()}</div>
                 <div class="cell actions-cell">
-                    <button data-action="edit" title="Edit Combatant">⚙️</button>
-                    <button data-action="delete" title="Delete Combatant">🗑️</button>
+                    <div class="btn-group">
+                        <button data-action="edit" title="Edit">⚙️</button>
+                        <button data-action="notes" title="Notes">📝</button>
+                        <button data-action="delete" title="Delete">🗑️</button>
+                    </div>
                 </div>
-                <div class="cell dashboard-link-cell"><a href="#">🔗</a></div>
+                <div class="cell dashboard-link-cell">
+                    <button data-action="toggle-dashboard" title="Toggle Dashboard">📄</button>
+                </div>
             `;
+
             combatantListBody.appendChild(row);
         });
-
-        // ✅ After rows are built, sync checkboxes & selection state
-        GroupSelector?.syncRowCheckboxes?.();
     }
 
 
@@ -85,7 +95,8 @@
             maxHp: 10,
             tempHpSources: [],
             role: 'dm',
-            imageUrl: ''
+            imageUrl: '',
+            dashboardId: null // <-- ADD THIS LINE
         };
         combatants.unshift(c);
         HistoryLog.log(`➕ Added ${c.name}.`);   // ✅ use HistoryLog
@@ -98,6 +109,14 @@
     // ======= EVENT LISTENERS =======
     addCombatantBtn.addEventListener('click', addDefaultCombatant);
 
+    // In scripts/combat_tracker.js, inside the IIFE, near the end
 
+    // Expose necessary functions for other modules to use
+    window.CombatTracker = {
+        render // <-- ADD THIS LINE
+    };
+
+    // Initial render on load
+    render();
 
     })();

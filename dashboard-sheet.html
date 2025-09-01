@@ -1,0 +1,44 @@
+<!-- file name: dashboard-sheet.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Sheet</title>
+    <link rel="stylesheet" href="css/dashboard-sheet.css">
+    <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
+    <script src="scripts/dashboard-sheet.js" defer></script>
+</head>
+<body>
+    <div id="sheet-container">
+        <header class="sheet-header">
+            <a href="view-dashboards.html" class="btn">← Back</a>
+            <h1 id="sheet-title" contenteditable="true">Turnden Forewit</h1>
+            <button id="lock-toggle-btn" class="btn unlocked">🔓 Unlocked</button>
+        </header>
+
+        <!-- NEW: Formatting Toolbar -->
+        <div id="format-toolbar" class="format-toolbar">
+            <button data-command="bold" title="Bold"><b>B</b></button>
+            <button data-command="italic" title="Italic"><i>I</i></button>
+            <button data-command="underline" title="Underline"><u>U</u></button>
+            <button data-command="strikeThrough" title="Strikethrough"><s>S</s></button>
+            <select data-command="formatBlock">
+                <option value="p">Paragraph</option>
+                <option value="h2">Heading 2</option>
+                <option value="h3">Heading 3</option>
+            </select>
+            <button data-command="justifyLeft" title="Align Left">AlignL</button>
+            <button data-command="justifyCenter" title="Align Center">AlignC</button>
+            <button data-command="justifyRight" title="Align Right">AlignR</button>
+            <button data-command="insertUnorderedList" title="Bulleted List">List</button>
+        </div>
+
+        <main id="blocks-container" class="grid-container">
+            <!-- All blocks will be dynamically added here by JavaScript -->
+        </main>
+        
+        <button id="add-block-btn" class="btn">+</button>
+    </div>
+</body>
+</html>

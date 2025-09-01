@@ -1,0 +1,107 @@
+/* General Styling */
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: #f6e4c1; /* Parchment background */
+    color: #3a3a3a;
+}
+
+#dashboard-viewer {
+    padding: 1rem;
+}
+
+/* Header Styling */
+#dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 3px solid #00bfa6; /* Teal accent line */
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+#dashboard-header h1 {
+    margin: 0;
+    font-size: 2rem;
+    color: #4a4a4a;
+}
+
+/* Controls Bar */
+.dashboard-controls {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.dashboard-controls button, .btn {
+    background-color: #7fb069;
+    color: white;
+    border: 1px solid #6ca05b;
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    text-decoration: none; /* For <a> tags styled as buttons */
+    display: inline-block;
+}
+
+.dashboard-controls button:hover, .btn:hover {
+    background-color: #6ca05b;
+}
+
+/* Folder and Card Styling */
+.folder-group {
+    margin-bottom: 2rem;
+}
+
+.folder-title {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: #5a5a5a;
+    border-bottom: 2px solid #d0bfa2;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.dashboard-card {
+    display: flex;
+    align-items: center;
+    background-color: #fff;
+    border: 1px solid #d0bfa2;
+    border-left: 5px solid #00bfa6; /* Accent border */
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.card-icon {
+    font-size: 2rem;
+    margin-right: 1rem;
+}
+
+.card-content {
+    flex-grow: 1;
+}
+
+.card-content h3 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.2rem;
+}
+
+.card-content p {
+    margin: 0;
+    color: #6c757d;
+}
+
+.edit-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #999;
+}
+
+.edit-btn:hover {
+    color: #333;
+}

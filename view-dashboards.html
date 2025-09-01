@@ -1,24 +1,66 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>View Dashboards</title>
-  <link rel="stylesheet" href="style.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View All Dashboards</title>
+    <!-- Shared CSS for dashboard look and feel -->
+    <link rel="stylesheet" href="css/list-dashboards.css">
 </head>
 <body>
-  <header>
-    <h2>📂 Dashboards</h2>
-    <button onclick="location.href='index.html'">⬅ Back to Home</button>
-    <button id="createDashboardBtn">➕ Create New Dashboard</button>
-  </header>
+    <!-- Main container for the dashboard view -->
+    <div id="dashboard-viewer">
+        <header id="dashboard-header">
+            <div class="header-left">
+                <h1>📁 Dashboards</h1>
+            </div>
+            <div class="header-right">
+                <!-- This button would take you back to the main tracker -->
+                <a href="index.html" class="btn">Back to Tracker</a>
+            </div>
+        </header>
 
-  <main>
-    <input type="text" placeholder="🔍 Search Dashboards..." id="searchBar">
-    <ul id="dashboard-list">
-      <li>Character Sheet: Turnden Forewit</li>
-      <li>Boss Dashboard: Ancient Black Dragon</li>
-    </ul>
-  </main>
+        <div class="dashboard-controls">
+            <button id="newDashboardBtn">➕ New Dashboard</button>
+            <button id="sortBtn">⇅ Sort A-Z</button>
+            <button id="newFolderBtn">📁 New Folder</button>
+        </div>
+
+        <!-- This container will be populated by JavaScript with folders and dashboards -->
+        <main id="dashboard-list-container">
+            <!-- Example of what JS will generate -->
+            <section class="folder-group">
+                <h2 class="folder-title">Session Notes</h2>
+                <div class="dashboard-card">
+                    <span class="card-icon">🧙‍♂️</span>
+                    <div class="card-content">
+                        <h3>Turnden Forewit</h3>
+                        <p>Halfling rogue, good with locks.</p>
+                    </div>
+                    <button class="edit-btn">✏️</button>
+                </div>
+                 <div class="dashboard-card">
+                    <span class="card-icon">🐉</span>
+                    <div class="card-content">
+                        <h3>Lord Vareth</h3>
+                        <p>Ancient black dragon. Tricky.</p>
+                    </div>
+                    <button class="edit-btn">✏️</button>
+                </div>
+            </section>
+
+            <section class="folder-group">
+                <h2 class="folder-title">Lone Dashboards</h2>
+                <div class="dashboard-card">
+                    <span class="card-icon">🧛</span>
+                    <div class="card-content">
+                        <h3>The Crimson Fang</h3>
+                        <p>Vampire noble in disguise.</p>
+                    </div>
+                    <button class="edit-btn">✏️</button>
+                </div>
+            </section>
+        </main>
+    </div>
 </body>
 </html>

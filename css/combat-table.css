@@ -33,11 +33,6 @@
   
   /* Ensures the table doesn't have extra empty height */
   height: min-content;
-
-  /* Add a border and some styling to match your example image */
-  border: 1px solid #d0bfa2;
-  border-radius: 8px;
-  overflow: hidden; /* Keeps rows contained within the rounded corners */
 }
 
 
@@ -47,35 +42,125 @@
   display: grid;
   grid-template-columns:
     /* match header + row: 10 columns */
-    minmax(150px, 2.4fr)     /* [img] */
-    minmax(56px, 0.7fr)     /* [init] */
+    minmax(200px, 1fr)     /* [img] */
+    minmax(56px, 1fr)     /* [init] */
     minmax(160px, 2fr)      /* [name] */
     minmax(60px, 0.7fr)     /* [ac] */
-    minmax(120px, 1.1fr)    /* [hp/max] */
+    minmax(120px, 2fr)    /* [hp/max] */
     minmax(70px, 0.8fr)     /* [tempHp] */
     minmax(160px, 1.6fr)    /* [status tags] */
-    minmax(84px, 0.4fr)     /* [role] */
+    minmax(84px, 0.6fr)     /* [role] */
     minmax(150px, 1.2fr)    /* [buttons/actions] */
     minmax(110px, 0.5fr);     /* [dashboard link] */
 
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
 }
 
 
-#combatantList {
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
+/* Style for individual combatant rows */
+.tracker-table-row {
+  background-color: #fff;
+  transition: background-color 0.2s ease;
 }
-.combatant {
-    padding: 0.5rem;
-    background-color: #f0f0f0;
-    border-radius: 4px;
-    border: 1px solid #ddd;
+
+
+
+
+/* --- Table Header Styling --- */
+.tracker-table-header {
+  background-color: #f6e4c1;
+  border-bottom: 2px solid #d0bfa2;
+  border-radius: 8px 8px 0 0;
+  color: #5c5c5c;
+  font-weight: bold;
+  font-family: sans-serif;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  padding-top: 0.4rem;
+  padding-bottom: 0.4rem;
 }
+
+/* --- Combatant Row Styling --- */
+.tracker-table-row {
+  background-color: #fdfdfa; /* A very light off-white */
+  border-bottom: 1px solid #e0e0e0;
+  transition: background-color 0.2s ease;
+}
+
+.tracker-table-row:last-child {
+  border-bottom: none;
+  border-radius: 0 0 8px 8px;
+}
+
+.tracker-table-row:hover {
+  background-color: #f1f8ff; /* Subtle blue on hover */
+}
+
+/* --- Current Turn Highlight --- */
+.tracker-table-row.current-turn {
+  background-color: #e8f5e9; /* Light green for the active turn */
+  border-left: 4px solid #4CAF50; /* Green accent bar */
+}
+
+/* --- Cell Specific Styling --- */
+.cell {
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Most cells are centered */
+}
+
+.cell.name-cell {
+  justify-content: flex-start; /* Left-align the name */
+  font-weight: bold;
+}
+
+.cell.image-cell img {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+}
+
+
+/* --- Special Content Inside Cells --- */
+.hp-cell {
+  gap: 0.5rem;
+  font-weight: bold;
+}
+
+.hp-heart {
+  color: #e53935; /* Red heart icon */
+  font-size: 1.2em;
+}
+
+.status-cell button,
+.actions-cell .btn-group button {
+  background-color: #e0e0e0;
+  border: 1px solid #bdbdbd;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+}
+
+.actions-cell .btn-group {
+  display: flex;
+  gap: 4px;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 /* Style for the bulk actions bar */

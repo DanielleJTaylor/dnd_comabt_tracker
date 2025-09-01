@@ -1,0 +1,84 @@
+/* file name: css/dashboard-sheet.css */
+:root {
+    --grid-columns: 12;
+    --grid-gap: 15px;
+    --parchment-bg: #f5eeda;
+    --parchment-dark: #e8d7b3;
+    --parchment-border: #d0bfa2;
+    --button-green: #7fb069;
+    --button-green-hover: #6ca05b;
+    --text-color: #3a3a3a;
+}
+
+body {
+    margin: 0;
+    font-family: sans-serif;
+    background-color: var(--parchment-bg);
+    color: var(--text-color);
+}
+
+#sheet-container { display: flex; flex-direction: column; height: 100vh; }
+.sheet-header { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1.5rem; background-color: var(--parchment-dark); border-bottom: 2px solid var(--parchment-border); }
+.btn { background-color: var(--button-green); color: white; border: 1px solid var(--button-green-hover); border-radius: 6px; padding: 10px 16px; font-size: 0.95rem; cursor: pointer; text-decoration: none; font-weight: bold; }
+.btn:hover { background-color: var(--button-green-hover); }
+
+/* --- Formatting Toolbar --- */
+.format-toolbar { background-color: var(--parchment-dark); padding: 8px; border-bottom: 2px solid var(--parchment-border); display: flex; gap: 5px; flex-wrap: wrap; }
+.format-toolbar button, .format-toolbar select { background: #fff; border: 1px solid var(--parchment-border); border-radius: 4px; cursor: pointer; padding: 5px 10px; }
+.format-toolbar button:hover { background-color: #eee; }
+
+/* --- Grid Container --- */
+.grid-container {
+    flex-grow: 1;
+    display: grid;
+    grid-template-columns: repeat(var(--grid-columns), 1fr);
+    grid-auto-rows: minmax(50px, auto);
+    gap: var(--grid-gap);
+    padding: var(--grid-gap);
+    overflow: auto;
+}
+
+/* --- Block Styling --- */
+.block {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background-color: #fdfaf2;
+    border: 1px solid var(--parchment-border);
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    overflow: visible; /* Allows handles to be outside */
+    z-index: 1; /* Default stacking */
+}
+.block.dragging { z-index: 10; opacity: 0.8; } /* Style for block being dragged */
+
+.block-header {
+    background-color: var(--parchment-dark);
+    padding: 8px 12px;
+    font-weight: bold;
+    cursor: move;
+    border-bottom: 1px solid var(--parchment-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.block-header [contenteditable] { flex-grow: 1; outline: none; }
+.delete-btn { background: none; border: none; cursor: pointer; font-size: 1.2rem; color: #888; }
+.delete-btn:hover { color: #d9534f; }
+
+.block-content { padding: 10px; flex-grow: 1; overflow: auto; outline: none; }
+
+.resize-handle {
+    position: absolute; bottom: -5px; right: -5px;
+    width: 20px; height: 20px;
+    cursor: nwse-resize; opacity: 0.4;
+    border-bottom: 3px solid var(--parchment-border);
+    border-right: 3px solid var(--parchment-border);
+}
+.block:hover .resize-handle { opacity: 1; }
+
+#add-block-btn { position: fixed; bottom: 25px; right: 25px; border-radius: 50%; width: 55px; height: 55px; font-size: 28px; line-height: 50px; text-align: center; padding: 0; box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+
+/* --- Lock State --- */
+.is-locked .resize-handle, .is-locked .delete-btn, .is-locked #add-block-btn { display: none; }
+.is-locked .block-header { cursor: default; }
