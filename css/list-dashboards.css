@@ -1,10 +1,35 @@
-/* General Styling */
-body {
+/* css/dashboard-sheet.css */
+
+/* Make the page scroll naturally as content grows */
+body { 
+    overflow: auto; 
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background-color: #f6e4c1; /* Parchment background */
     color: #3a3a3a;
 }
+
+/* Single source of truth for row height */
+:root {
+  --grid-columns: 12;
+  --grid-gap: 10px;
+  --row-height: 50px; /* <— use this everywhere */
+}
+
+/* Grid uses fixed row height so snapping math is exact */
+.grid-container{
+  grid-template-columns: repeat(var(--grid-columns), 1fr);
+  grid-auto-rows: var(--row-height);   /* fixed, not "auto" */
+  gap: var(--grid-gap);
+  padding: var(--grid-gap);
+  /* Remove overflow here so the document (body) grows */
+  overflow: visible;
+}
+
+/* Make Interact’s rect math match the visuals */
+.block { box-sizing: border-box; }
+
+
 
 #dashboard-viewer {
     padding: 1rem;

@@ -1,167 +1,295 @@
-// file name: scripts/dashboard-sheet.js
+// dashboard-sheet.js
+// Snap-to-grid (12 cols), resizable/dragable blocks with no overlap and lock toggle.
+
 document.addEventListener('DOMContentLoaded', () => {
-    // --- DOM ELEMENT REFERENCES ---
-    const formatToolbar = document.getElementById('format-toolbar');
-    const blocksContainer = document.getElementById('blocks-container');
-    const addBlockBtn = document.getElementById('add-block-btn');
-    const lockButton = document.getElementById('lock-toggle-btn');
-    const sheetContainer = document.getElementById('sheet-container');
+  // ---- DOM ----
+  const formatToolbar   = document.getElementById('format-toolbar');
+  const blocksContainer = document.getElementById('blocks-container');
+  const addBlockBtn     = document.getElementById('add-block-btn');
+  const lockButton      = document.getElementById('lock-toggle-btn');
+  const sheetContainer  = document.getElementById('sheet-container');
 
-    let isLocked = false;
+  let isLocked = false;
 
-    // --- EVENT LISTENERS ---
-    lockButton.addEventListener('click', toggleLock);
-    addBlockBtn.addEventListener('click', createNewBlock);
-    
-    formatToolbar.addEventListener('click', (e) => {
-        const command = e.target.closest('button')?.dataset.command;
-        if (command) document.execCommand(command, false, null);
-    });
-    formatToolbar.addEventListener('change', (e) => {
-        const select = e.target.closest('select');
-        if (select?.dataset.command === 'formatBlock') {
-            document.execCommand(select.dataset.command, false, select.value);
-        }
-    });
+  // Keep an occupancy map of placed blocks (by cell)
+  // Each block maintains dataset: colStart,rowStart,colSpan,rowSpan
+  // Grid is unbounded in rows (auto grows)
+  // -------------------------------------------------------------
 
-    blocksContainer.addEventListener('click', (e) => {
-        if (isLocked) return;
-        if (e.target.classList.contains('delete-btn')) {
-            e.target.closest('.block').remove();
-        }
-    });
+  // ========== GRID METRICS ==========
+  function getMetrics(){
+    const cs = getComputedStyle(blocksContainer);
+    const cols = parseInt(cs.getPropertyValue('--grid-columns')) || 12;
+    const gap  = parseFloat((cs.gap || cs.gridGap || '0').split(' ')[0]) || 0;
+    const contentW = blocksContainer.clientWidth;
+    const cellW = (contentW - gap * (cols - 1)) / cols;
 
-    // --- CORE FUNCTIONS ---
+    // Keep rows ≈ squares: set CSS --row-size to cellW (but cap a bit)
+    const rowSize = Math.max(56, Math.min(120, cellW));
+    blocksContainer.style.setProperty('--row-size', `${rowSize}px`);
 
-    function toggleLock() {
-        isLocked = !isLocked;
-        sheetContainer.classList.toggle('is-locked', isLocked);
-        lockButton.textContent = isLocked ? '🔒 Locked' : '🔓 Unlocked';
-        document.querySelectorAll('[contenteditable]').forEach(el => {
-            el.setAttribute('contenteditable', !isLocked);
-        });
-        if (isLocked) {
-            interact('.block').unset();
-        } else {
-            initializeInteract();
-        }
+    return { cols, gap, cellW, rowH: rowSize };
+  }
+
+  // ========== OCCUPANCY ==========
+  function rectsOverlap(a,b){
+    return !(a.colStart + a.colSpan <= b.colStart ||
+             b.colStart + b.colSpan <= a.colStart ||
+             a.rowStart + a.rowSpan <= b.rowStart ||
+             b.rowStart + b.rowSpan <= a.rowStart);
+  }
+
+  function getAllRects(excludeEl){
+    const items = [...blocksContainer.querySelectorAll('.block')];
+    return items
+      .filter(el => el !== excludeEl)
+      .map(el => ({
+        el,
+        colStart: +el.dataset.colStart,
+        rowStart: +el.dataset.rowStart,
+        colSpan : +el.dataset.colSpan,
+        rowSpan : +el.dataset.rowSpan
+      }));
+  }
+
+  function collides(targetRect, excludeEl){
+    return getAllRects(excludeEl).some(r => rectsOverlap(targetRect, r));
+  }
+
+  // Find the lowest free row to drop a rect if it collides.
+  function dropToFreeRow(rect, excludeEl){
+    // Try current row; if colliding, push down until it fits.
+    let test = {...rect};
+    while(collides(test, excludeEl)) {
+      test.rowStart += 1;
     }
+    return test;
+  }
 
-    function createNewBlock() {
-        if (isLocked) return;
-        const { row } = findNextAvailableSpot();
-        const block = document.createElement('div');
-        block.className = 'block';
-        block.innerHTML = `
-            <div class="block-header">
-                <span contenteditable="true">New Block</span>
-                <button class="delete-btn">×</button>
-            </div>
-            <div class="block-content" contenteditable="true"></div>
-            <div class="resize-handle"></div>
-        `;
-        block.style.gridColumn = `1 / span 4`;
-        block.style.gridRow = `${row} / span 4`;
-        blocksContainer.appendChild(block);
-        updateBlockData(block);
+  // Clamp rect within grid horizontally (rows are unbounded)
+  function clampRect(rect, metrics){
+    const maxStart = metrics.cols - rect.colSpan + 1;
+    rect.colStart = Math.max(1, Math.min(rect.colStart, maxStart));
+    rect.rowStart = Math.max(1, rect.rowStart);
+    return rect;
+  }
+
+  // ========== DATA HELPERS ==========
+  function readRect(el){
+    return {
+      el,
+      colStart: +el.dataset.colStart,
+      rowStart: +el.dataset.rowStart,
+      colSpan : +el.dataset.colSpan,
+      rowSpan : +el.dataset.rowSpan
+    };
+  }
+
+  function writeRect(el, rect){
+    el.dataset.colStart = rect.colStart;
+    el.dataset.rowStart = rect.rowStart;
+    el.dataset.colSpan  = rect.colSpan;
+    el.dataset.rowSpan  = rect.rowSpan;
+    el.style.gridColumn = `${rect.colStart} / span ${rect.colSpan}`;
+    el.style.gridRow    = `${rect.rowStart} / span ${rect.rowSpan}`;
+  }
+
+  // ========== CREATE ==========
+  function createNewBlock() {
+    if (isLocked) return;
+
+    const metrics = getMetrics();
+
+    // Default new block: 1/12 width × 1 row
+    const rect = { colStart: 1, rowStart: findNextOpenRow(1,1), colSpan: 1, rowSpan: 1 };
+
+    const block = document.createElement('div');
+    block.className = 'block';
+    block.innerHTML = `
+        <button class="delete-btn">×</button>
+        <div class="block-content" contenteditable="true"></div>
+        <div class="resize-handle"></div>
+    `;
+
+
+    writeRect(block, rect);
+    blocksContainer.appendChild(block);
+    bindBlockEvents(block);
+  }
+
+  // Find next empty row index for a given span at col 1
+  function findNextOpenRow(colSpan, rowSpan){
+    let row = 1;
+    const test = { colStart: 1, rowStart: row, colSpan, rowSpan };
+    while (collides(test, null)) {
+      row += 1;
+      test.rowStart = row;
     }
-    
-    // --- INTERACT.JS LOGIC (DRAG & RESIZE) ---
-    function initializeInteract() {
-        interact('.block')
+    return row;
+  }
+
+  // ========== BIND DRAG / RESIZE ==========
+    function bindBlockEvents(el){
+        const content = el.querySelector('.block-content');
+
+        interact(el)
             .draggable({
-                allowFrom: '.block-header',
-                listeners: {
-                    start: (event) => event.target.classList.add('dragging'),
-                    move: dragMoveListener,
-                    end: (event) => {
-                        event.target.classList.remove('dragging');
-                        dragEndListener(event);
-                    }
+            // drag from anywhere on the block
+            listeners: {
+                start: e => {
+                // visually mark
+                e.target.classList.add('dragging');
+
+                // temporarily disable editing so a drag can start anywhere
+                if (content) {
+                    content.dataset.prevCe = content.getAttribute('contenteditable') || 'true';
+                    content.setAttribute('contenteditable', 'false');
                 }
+                },
+                move: dragMove,
+                end: e => {
+                e.target.classList.remove('dragging');
+
+                // restore editing state
+                if (content) {
+                    content.setAttribute('contenteditable', content.dataset.prevCe || 'true');
+                    delete content.dataset.prevCe;
+                }
+
+                dragEnd(e);
+                }
+            },
+            // only ignore true controls
+            ignoreFrom: '.resize-handle, .delete-btn',
+            modifiers: [
+                interact.modifiers.restrictRect({ restriction: blocksContainer, endOnly: true })
+            ]
             })
             .resizable({
-                edges: { right: '.resize-handle', bottom: '.resize-handle' },
-                listeners: { move: resizeListener },
+            edges: { bottom: '.resize-handle', right: '.resize-handle' },
+            listeners: { move: resizeMove, end: resizeEnd }
             });
-    }
 
-    function dragMoveListener(event) {
-        const target = event.target;
-        const x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx;
-        const y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy;
-        target.style.transform = `translate(${x}px, ${y}px)`;
-        target.setAttribute('data-x', x);
-        target.setAttribute('data-y', y);
-    }
-    
-    function dragEndListener(event) {
-        const target = event.target;
-        const { cellWidth, cellHeight } = getCellDimensions();
-        
-        const colShift = Math.round(parseFloat(target.getAttribute('data-x')) / cellWidth);
-        const rowShift = Math.round(parseFloat(target.getAttribute('data-y')) / cellHeight);
-
-        const newColStart = Math.max(1, parseInt(target.dataset.colStart) + colShift);
-        const newRowStart = Math.max(1, parseInt(target.dataset.rowStart) + rowShift);
-        
-        target.style.gridColumn = `${newColStart} / span ${target.dataset.colSpan}`;
-        target.style.gridRow = `${newRowStart} / span ${target.dataset.rowSpan}`;
-
-        target.style.transform = 'none';
-        target.setAttribute('data-x', '0');
-        target.setAttribute('data-y', '0');
-        updateBlockData(target);
-    }
-
-    function resizeListener(event) {
-        const target = event.target;
-        const { cellWidth, cellHeight } = getCellDimensions();
-
-        const newColSpan = Math.max(1, Math.round(event.rect.width / cellWidth));
-        const newRowSpan = Math.max(1, Math.round(event.rect.height / cellHeight));
-        
-        target.style.gridColumn = `${target.dataset.colStart} / span ${newColSpan}`;
-        target.style.gridRow = `${target.dataset.rowStart} / span ${newRowSpan}`;
-        
-        updateBlockData(target);
-    }
-
-    // --- HELPER FUNCTIONS ---
-    
-    function findNextAvailableSpot() {
-        const blocks = Array.from(blocksContainer.querySelectorAll('.block'));
-        if (blocks.length === 0) return { row: 1, col: 1 };
-        
-        let maxRowEnd = 0;
-        blocks.forEach(block => {
-            const rowStart = parseInt(block.dataset.rowStart);
-            const rowSpan = parseInt(block.dataset.rowSpan);
-            if (rowStart + rowSpan > maxRowEnd) {
-                maxRowEnd = rowStart + rowSpan;
-            }
+        // delete button
+        el.querySelector('.delete-btn')?.addEventListener('click', () => {
+            if (isLocked) return;
+            el.remove();
         });
-        return { row: maxRowEnd, col: 1 };
     }
 
-    function getCellDimensions() {
-        const colCount = 12;
-        const gap = 15;
-        const cellWidth = (blocksContainer.clientWidth - (gap * (colCount - 1))) / colCount;
-        const cellHeight = 50 + gap; // grid-auto-rows + gap
-        return { cellWidth, cellHeight };
+
+  function dragMove(e){
+    const t = e.target;
+    const x = (parseFloat(t.getAttribute('data-x')) || 0) + e.dx;
+    const y = (parseFloat(t.getAttribute('data-y')) || 0) + e.dy;
+    t.style.transform = `translate(${x}px, ${y}px)`;
+    t.setAttribute('data-x', x);
+    t.setAttribute('data-y', y);
+  }
+
+  function dragEnd(e){
+    const el = e.target;
+    el.classList.remove('dragging');
+    const metrics = getMetrics();
+
+    const dx = parseFloat(el.getAttribute('data-x')) || 0;
+    const dy = parseFloat(el.getAttribute('data-y')) || 0;
+
+    // Convert pixel offset → grid shifts
+    const colShift = Math.round(dx / (metrics.cellW + metrics.gap));
+    const rowShift = Math.round(dy / (metrics.rowH + metrics.gap));
+
+    const cur = readRect(el);
+    let next = {
+      ...cur,
+      colStart: cur.colStart + colShift,
+      rowStart: cur.rowStart + rowShift
+    };
+
+    next = clampRect(next, metrics);
+    next = dropToFreeRow(next, el);
+    writeRect(el, next);
+
+    // reset transform store
+    el.style.transform = 'none';
+    el.setAttribute('data-x', '0');
+    el.setAttribute('data-y', '0');
+  }
+
+  function resizeMove(e){
+    const el = e.target;
+    const metrics = getMetrics();
+    const cur = readRect(el);
+
+    // proposed spans from visual rect
+    let propColSpan = Math.max(1, Math.round((e.rect.width  + metrics.gap) / (metrics.cellW + metrics.gap)));
+    let propRowSpan = Math.max(1, Math.round((e.rect.height + metrics.gap) / (metrics.rowH + metrics.gap)));
+
+    // clamp within grid width
+    propColSpan = Math.min(propColSpan, metrics.cols - cur.colStart + 1);
+
+    // preview style during resize (no collision fix until end)
+    el.style.gridColumn = `${cur.colStart} / span ${propColSpan}`;
+    el.style.gridRow    = `${cur.rowStart} / span ${propRowSpan}`;
+    el.dataset.colSpan  = propColSpan;
+    el.dataset.rowSpan  = propRowSpan;
+  }
+
+  function resizeEnd(e){
+    const el = e.target;
+    const metrics = getMetrics();
+
+    // Snap to integers already in dataset from resizeMove
+    let next = readRect(el);
+
+    // If colliding, reduce rowSpan first, then try dropping downward
+    while (collides(next, el) && next.rowSpan > 1) {
+      next.rowSpan -= 1;
+    }
+    if (collides(next, el)) {
+      next = dropToFreeRow(next, el);
     }
 
-    function updateBlockData(element) {
-        const [colStart, colSpan] = element.style.gridColumn.split(' / span ').map(n => parseInt(n));
-        const [rowStart, rowSpan] = element.style.gridRow.split(' / span ').map(n => parseInt(n));
-        element.dataset.colStart = colStart;
-        element.dataset.colSpan = colSpan;
-        element.dataset.rowStart = rowStart;
-        element.dataset.rowSpan = rowSpan;
-    }
+    writeRect(el, next);
+  }
 
-    // --- INITIALIZATION ---
-    createNewBlock();
-    initializeInteract();
+  // ========== LOCK ==========
+  function toggleLock(){
+    isLocked = !isLocked;
+    sheetContainer.classList.toggle('is-locked', isLocked);
+    lockButton.textContent = isLocked ? '🔒 Locked' : '🔓 Unlocked';
+
+    // Toggle interact on all blocks
+    [...blocksContainer.querySelectorAll('.block')].forEach(el => {
+      if (isLocked) interact(el).unset(); else bindBlockEvents(el);
+    });
+
+    // toggle contenteditable
+    document.querySelectorAll('[contenteditable]').forEach(el => {
+      el.setAttribute('contenteditable', String(!isLocked));
+    });
+  }
+
+  // ========== TOOLBAR ==========
+  formatToolbar.addEventListener('click', (e) => {
+    const cmd = e.target.closest('button')?.dataset.command;
+    if (cmd) document.execCommand(cmd, false, null);
+  });
+  formatToolbar.addEventListener('change', (e) => {
+    const sel = e.target.closest('select');
+    if (sel?.dataset.command === 'formatBlock') {
+      document.execCommand(sel.dataset.command, false, sel.value);
+    }
+  });
+
+  // ========== WIRING ==========
+  lockButton.addEventListener('click', toggleLock);
+  addBlockBtn.addEventListener('click', createNewBlock);
+
+  // Make sure row height follows column width on resize
+  window.addEventListener('resize', getMetrics, { passive:true });
+
+  // Seed
+  getMetrics();
+  createNewBlock();
 });
