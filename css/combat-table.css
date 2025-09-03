@@ -1,127 +1,99 @@
 /* css/combat-table.css */
 
 /*
-  This container wraps your table. We use it to control position and overflow.
+  This container wraps your table. It uses flexbox to position the table
+  and overflow:auto to enable scrolling when the table is too wide.
 */
-/* 1) The wrapper that holds the table */
-
-/* --- 1. The Container that Manages Scrolling and Centering --- */
 .table-scroll-container {
-  flex-grow: 1; /* Allows the container to fill the available vertical space */
-  display: flex; /* Use flexbox to easily center the table */
-  justify-content: center; /* Horizontally center the table within this container */
-
-  /* CRUCIAL: This enables the horizontal scrollbar when the table is wider than the container */
-  overflow-x: auto;
-  overflow-y: auto; /* Allow for vertical scrolling of the combatant list */
-
-  /* Add some breathing room around the table */
-  padding: 1rem 2rem;
-}
-
-
-/* --- 2. The Table Itself (Responsive Sizing) --- */
-.tracker-table {
-  /* This is the core logic for responsive sizing:
-     - It will try to be 95% of its container's width.
-     - It will never get smaller than 980px.
-     - It will never get larger than 1600px.
-  */
-  width: 90%;
-  min-width: 980px;
-  max-width: 3000px;
-  
-  /* Ensures the table doesn't have extra empty height */
-  height: min-content;
-}
-
-
-
-.tracker-table-header,
-.tracker-table-row {
-  display: grid;
-  grid-template-columns:
-    /* match header + row: 10 columns */
-    minmax(200px, 1fr)     /* [img] */
-    minmax(56px, 1fr)     /* [init] */
-    minmax(160px, 2fr)      /* [name] */
-    minmax(60px, 0.7fr)     /* [ac] */
-    minmax(120px, 2fr)    /* [hp/max] */
-    minmax(70px, 0.8fr)     /* [tempHp] */
-    minmax(160px, 1.6fr)    /* [status tags] */
-    minmax(84px, 0.6fr)     /* [role] */
-    minmax(150px, 1.2fr)    /* [buttons/actions] */
-    minmax(110px, 0.5fr);     /* [dashboard link] */
-
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-}
-
-
-/* Style for individual combatant rows */
-.tracker-table-row {
-  background-color: #fff;
-  transition: background-color 0.2s ease;
-}
-
-
-
-
-/* --- Table Header Styling --- */
-.tracker-table-header {
-  background-color: #f6e4c1;
-  border-bottom: 2px solid #d0bfa2;
-  border-radius: 8px 8px 0 0;
-  color: #5c5c5c;
-  font-weight: bold;
-  font-family: sans-serif;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  padding-top: 0.4rem;
-  padding-bottom: 0.4rem;
-}
-
-/* --- Combatant Row Styling --- */
-.tracker-table-row {
-  background-color: #fdfdfa; /* A very light off-white */
-  border-bottom: 1px solid #e0e0e0;
-  transition: background-color 0.2s ease;
-}
-
-.tracker-table-row:last-child {
-  border-bottom: none;
-  border-radius: 0 0 8px 8px;
-}
-
-.tracker-table-row:hover {
-  background-color: #f1f8ff; /* Subtle blue on hover */
-}
-
-/* --- Current Turn Highlight --- */
-.tracker-table-row.current-turn {
-  background-color: #e8f5e9; /* Light green for the active turn */
-  border-left: 4px solid #4CAF50; /* Green accent bar */
-}
-
-/* --- Cell Specific Styling --- */
-.cell {
+  flex: 1 1 auto;
+  overflow: auto; /* Correctly enables horizontal and vertical scrolling */
   display: flex;
-  align-items: center;
-  justify-content: center; /* Most cells are centered */
+  justify-content: center; /* Centers the table horizontally */
+  align-items: flex-start; /* Aligns table to the top */
+  padding-top: 8px;
 }
 
-.cell.name-cell {
-  justify-content: flex-start; /* Left-align the name */
-  font-weight: bold;
+/* 
+  The table itself. Giving it a min-width allows it to be wider than 
+  the container, which is what makes the container's scrollbar appear.
+*/
+#tracker-table {
+  box-sizing: border-box;
+  width: 95%;
+  min-width: 1100px; /* ADDED: Ensures columns don't get too crushed */
+
+  /* Grid column definitions */
+  --cols:
+    minmax(60px, 0.7fr)   /* [IMG] */
+    minmax(56px, 0.7fr)   /* [INIT] */
+    minmax(120px, 2fr)    /* [NAME] */
+    minmax(60px, 0.7fr)   /* [AC] */
+    minmax(120px, 1.1fr)  /* [HP/MAX] */
+    minmax(70px, 0.8fr)   /* [TEMPHP] */
+    minmax(160px, 1.6fr)  /* [STATUS TAGS] */
+    minmax(84px, 0.4fr)   /* [ROLE] */
+    minmax(150px, 1.2fr)  /* [BUTTONS/ACTIONS] */
+    minmax(60px, 0.5fr);  /* [DASHBOARD LINK] - Adjusted size */
 }
 
-.cell.image-cell img {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
+/* This shared rule applies the grid structure to both the header and the rows */
+#tracker-table > .tracker-table-header,
+#combatant-list-body > .tracker-table-row {
+  display: grid;
+  grid-template-columns: var(--cols);
+  gap: 8px;
+  padding: 6px 8px;
+  align-items: center; /* Vertically align content in all cells */
 }
 
+/* === HEADER (child of #tracker-table) === */
+#tracker-table > .tracker-table-header {
+  background: #f6e4c1;
+  border-bottom: 2px solid #d0bfa2;
+  color: #5c5c5c;
+  font: 700 0.8rem/1.2 sans-serif;
+  text-transform: uppercase;
+}
+#tracker-table > .tracker-table-header > .cell { background: inherit; }
+
+/* === ROWS (inside #combatant-list-body) === */
+#combatant-list-body > .tracker-table-row {
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0;
+  transition: background-color .2s ease;
+}
+
+#combatant-list-body > .tracker-table-row:nth-child(even) { background: #fbf7eb; }
+#combatant-list-body > .tracker-table-row.current-turn {
+  background: #e8f5e9;
+  border-left: 4px solid #4CAF50;
+}
+#combatant-list-body > .tracker-table-row:hover { background:#f1f8ff; }
+#combatant-list-body > .tracker-table-row .cell { background: inherit; }
+
+
+/* === CELL STYLES === */
+.cell { 
+  display:flex; 
+  align-items:center; 
+  padding: 2px 4px; 
+}
+
+/* NEW: Utility class for centered content to ensure header and rows match */
+.cell-center {
+  justify-content: center;
+}
+
+.image-cell img { 
+  width:60px; 
+  height:60px; 
+  border-radius:50%; 
+  object-fit:cover; 
+}
+.name-cell { 
+  justify-content:flex-start; 
+  font-weight:700; 
+}
 
 /* --- Special Content Inside Cells --- */
 .hp-cell {
@@ -144,50 +116,83 @@
   font-size: 0.8rem;
 }
 
+/* FIX: Make dashboard button background transparent to match the row */
+.dashboard-link-cell button {
+  background-color: transparent;
+  border: 1px solid #bdbdbd;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
 .actions-cell .btn-group {
   display: flex;
   gap: 4px;
 }
 
 
+/*
+██╗██████╗ ██╗   ██╗██████╗ ███████╗██████╗ 
+██║╚════██╗██║   ██║██╔══██╗██╔════╝██╔══██╗
+██║ █████╔╝██║   ██║██████╔╝█████╗  ██████╔╝
+██║ ╚═══██╗██║   ██║██╔═══╝ ██╔══╝  ██╔══██╗
+██║██████╔╝╚██████╔╝██║     ███████╗██║  ██║
+╚═╝╚═════╝  ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═╝
+*/
+/* NEW: Rules for combatants inside a group */
+
+.tracker-table-row.in-group {
+  /* This redefines the grid columns ONLY for grouped rows */
+  --cols:
+    minmax(60px, 0.7fr)   /* Span Area 1 */
+    minmax(56px, 0.7fr)   /* Span Area 2 */
+    minmax(120px, 2fr)    /* [NAME] */
+    minmax(60px, 0.7fr)   /* [AC] */
+    minmax(120px, 1.1fr)  /* [HP/MAX] */
+    minmax(70px, 0.8fr)   /* [TEMPHP] */
+    minmax(160px, 1.6fr)  /* [STATUS TAGS] */
+    minmax(84px, 0.4fr)   /* [ROLE] */
+    minmax(150px, 1.2fr)  /* [BUTTONS/ACTIONS] */
+    minmax(60px, 0.5fr);  /* [DASHBOARD LINK] */
+}
+
+/* 1. Hide the Initiative cell */
+.tracker-table-row.in-group .init-cell {
+  display: none;
+}
+
+/* 2. Make the Image cell span across the first two columns */
+.tracker-table-row.in-group .image-cell {
+  grid-column: 1 / span 2; /* Starts at column 1, spans 2 columns */
+  justify-content: center; /* Center the image in the new wider cell */
+}
+
+/* 3. Indent the Name cell */
+.tracker-table-row.in-group .name-cell {
+  padding-left: 20px; /* Adjust this value as needed for the indent */
+}
 
 
+/* ... rest of your CSS file remains the same ... */
 
-
-
-
-
-
-
-
-
-
-
-/* Style for the bulk actions bar */
-/* BULK ACTIONS: Grid that never overflows horizontally */
+/* === BULK ACTIONS BAR === */
 .bulk-actions-bar {
-  display: grid;
-  grid-template-columns: auto auto 1fr auto; /* checkbox | counter | spacer | actions */
+  display: none; /* hidden by default */
+  grid-template-columns: auto auto 1fr auto;
   align-items: center;
   gap: 0.75rem 1rem;
-
   width: 100%;
   box-sizing: border-box;
   padding: 0.75rem 1rem;
-
   background-color: #f6e4c1;
   border-top: 2px solid #d0bfa2;
   border-bottom: 2px solid #d0bfa2;
-
-  /* Show/Hide without squashing the height */
-  display: none;            /* hidden by default */
 }
 
 .bulk-actions-bar.visible {
-  display: grid;            /* show when you add .visible */
+  display: grid;
 }
 
-/* Left pieces */
 .bulk-actions-bar .select-all input {
   transform: scale(1.2);
   vertical-align: middle;
@@ -195,18 +200,16 @@
 }
 #selectionCounter { font-weight: 700; }
 
-/* Right button group (kept as a single grid item) */
 .bulk-actions-actions {
   display: grid;
   grid-auto-flow: column;
   gap: 0.5rem;
-  /* keep inside container on tight screens */
   max-width: 100%;
   overflow-x: auto;
 }
 
 .bulk-actions-actions button {
-  white-space: nowrap;                 /* prevent multi-line buttons */
+  white-space: nowrap;
   background-color: #7fb069;
   color: #fff;
   border: 1px solid #6ca05b;
@@ -217,10 +220,9 @@
 }
 .bulk-actions-actions button:hover { background-color: #6ca05b; }
 
-/* Responsive: stack on narrow widths */
 @media (max-width: 800px) {
   .bulk-actions-bar {
-    grid-template-columns: 1fr;       /* one column */
+    grid-template-columns: 1fr;
     row-gap: 0.5rem;
   }
   .bulk-actions-actions {
@@ -230,32 +232,31 @@
   }
 }
 
-
-
+/* === TRACKER LOG PANEL === */
 .tracker-log-panel {
-    position: fixed;
-    bottom: 0;
-    right: 0;
-    width: 350px;
-    height: 40vh;
-    background-color: rgba(20, 20, 20, 0.9);
-    color: #f0f0f0;
-    border-top: 2px solid #00bfa6;
-    border-left: 2px solid #00bfa6;
-    border-radius: 10px 0 0 0;
-    transform: translateY(100%); /* Start hidden below the screen */
-    transition: transform 0.3s ease-in-out;
-    z-index: 100;
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  width: 350px;
+  height: 40vh;
+  background-color: rgba(20, 20, 20, 0.9);
+  color: #f0f0f0;
+  border-top: 2px solid #00bfa6;
+  border-left: 2px solid #00bfa6;
+  border-radius: 10px 0 0 0;
+  transform: translateY(100%); /* Start hidden */
+  transition: transform 0.3s ease-in-out;
+  z-index: 100;
 }
 
 .tracker-log-panel.visible {
-    transform: translateY(0); /* Slide into view */
+  transform: translateY(0); /* Slide into view */
 }
 
 .log-content {
-    padding: 1rem;
-    height: 100%;
-    overflow-y: auto; /* Allow scrolling if content is long */
-    box-sizing: border-box;
-    font-family: 'Courier New', Courier, monospace;
+  padding: 1rem;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  font-family: 'Courier New', Courier, monospace;
 }
