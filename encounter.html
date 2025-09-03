@@ -22,7 +22,7 @@
     <div id="app-container">
 
         <!-- LEFT: Dashboards panel -->
-        <section id="left-dashboard">
+        <section id="right-dashboard">
             <div id="dashboard-header">
                 <h3>📁 Dashboards</h3>
                <button id="closeDashboardBtn">✖</button>
@@ -39,7 +39,7 @@
 
 
         <!-- RIGHT: Tracker panel -->
-        <section id="right-tracker">
+        <section id="left-tracker">
 
         <header class="tracker-header">
             <!-- GROUP 1: Items for the left side -->
@@ -67,16 +67,17 @@
         <main class="tracker-wrapper">
             <!-- In your .controls-row -->
             <div class="controls-row">
-                <button id="seeDashboardsBtn" class="btn">📋 <span class="label">Dashboards</span></button>
-                <button id="historyLogBtn" class="btn">📜 <span class="label">History</span></button>
-                <span id="roundCounter">Round: 1</span>
-                <button class="btn">⬅ <span class="label">Prev Turn</span></button>
-                <div id="currentTurnDisplay">🟢 Current Turn: <strong>None</strong></div>
-                <button class="btn">➡ <span class="label">Next Turn</span></button>
-                <button class="btn">💾 <span class="label">Save</span></button>
-                <button class="btn">📂 <span class="label">Load</span></button>
-                <button class="btn">🗑️ <span class="label">Clear</span></button>
-                <button id="lockGroupSelectionBtn" class="btn">🔒 <span class="label">Lock Groups</span></button>
+            <button id="lockGroupSelectionBtn" class="btn">🔒 <span class="label">Lock Groups</span></button>
+            <button id="historyLogBtn" class="btn">📜 <span class="label">History</span></button>
+            <span id="roundCounter">Round: 1</span>
+            <button class="btn">⬅ <span class="label">Prev Turn</span></button>
+            <div id="currentTurnDisplay">🟢 Current Turn: <strong>None</strong></div>
+            <button class="btn">➡ <span class="label">Next Turn</span></button>
+            <button class="btn">💾 <span class="label">Save</span></button>
+            <button class="btn">📂 <span class="label">Load</span></button>
+            <button class="btn">🗑️ <span class="label">Clear</span></button>
+
+            <button id="seeDashboardsBtn" class="btn">📋 <span class="label">Dashboards</span></button>
             </div>
 
             

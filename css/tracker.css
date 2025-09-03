@@ -18,15 +18,11 @@ html, body {
 }
 
 
-#left-dashboard {
-    width: 0;                /* starts collapsed */
-    flex-shrink: 0;          /* don’t let it shrink further */
-    display: flex;
-    background-color: #2c2c2c;
-    border-right: 2px solid #00bfa6;
-    flex-direction: column;   /* header + controls + list stack */
-      
-}
+/* --- Panel placement (dashboard on right) --- */
+#left-tracker { order: 1;  }     /* main panel, fills remaining space */
+#right-dashboard { order: 2;  }
+
+
 
 #dashboard-header {
   background-color: #444;     /* dark strip for the header */
@@ -43,19 +39,27 @@ html, body {
 
 /* css/tracker.css */
 
-#right-tracker {
-    flex-grow: 1; /* Allows it to take the remaining space from the flex #app-container */
-    width: 100%; /* Start at 100% width */
-
-    /* --- KEY CHANGE: Use Grid for the layout --- */
-    display: grid;
-    /* Header gets the height it needs, the main area takes ALL remaining space */
-    grid-template-rows: auto 1fr;
-    
-    /* Prevents content from ever spilling out of this panel */
-    overflow: hidden;
-    background-color: lightblue;
+/* Ensure the tracker column is a proper grid and doesn't overflow */
+#left-tracker {
+  flex-grow: 1;
+  width: 0%;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
 }
+
+/* Right panel visuals */
+#right-dashboard {
+  width: 0;                /* collapsed by default */
+  flex-shrink: 0;
+  display: flex;
+  background-color: #2c2c2c;
+  border-left: 2px solid #00bfa6;   /* was border-right */
+  flex-direction: column;
+}
+
+/* Push the single Dashboard button to the far right of the controls row */
+.controls-row #seeDashboardsBtn { margin-left: auto; }
 
 main.tracker-wrapper {
   /* This is now a grid child. We make it a flex container for its own children. */
@@ -64,14 +68,9 @@ main.tracker-wrapper {
   overflow: hidden; /* Important for child scrolling */
 }
 
-/* When dashboard is visible */
-#app-container.dashboard-visible #left-dashboard {
-  width: 45%;              /* expanded size */
-}
-
-#app-container.dashboard-visible #right-tracker {
-  width: 55%;              /* shrinks accordingly */
-}
+/* When dashboard is visible, give it 45% and leave 55% to the tracker */
+#app-container.dashboard-visible #right-dashboard { width: 45%; }
+#app-container.dashboard-visible #left-tracker    { width: 55%; }
 
 
 /* css/tracker.css */
