@@ -87,53 +87,96 @@
 /* === Unified “group” skin for header + children === */
 
 /* Pick ONE dark folder tone and reuse it everywhere */
-:root {
-  --group-bg: #d0bfa2;        /* darker brown you use on the folder bar */
-  --group-bg-hover: #c5b294;  /* hover a hair darker */
-  --group-divider: #b6a488;   /* thin separators that still read on brown */
+/* === Group palette (tweak to taste) === */
+/* ===== Group palette ===== */
+:root{
+  --group-header-bg: #a8ba95;   /* darker green (folder line) */
+  --group-header-br: #8ba277;
+  --group-member-bg: #cfdfc3;   /* lighter green (member rows) */
+  --group-member-bg-hover: #dbe8d2;
 }
 
-/* Group header (folder row) */
+/* Group header uses the SAME grid as rows so columns line up */
 .group-row {
-  background-color: var(--group-bg) !important;
-  border-top: 2px solid var(--group-divider);
-  border-bottom: 2px solid var(--group-divider);
-}
-.group-row:hover { background-color: var(--group-bg-hover) !important; }
+  display: grid;
+  grid-template-columns: var(--cols); /* <-- same as table rows */
+  align-items: center;
+  gap: 8px;
 
-/* Every combatant that belongs to a group */
+  /* Make the bar a bit taller */
+  padding: 6px 8px;              /* increased height */
+  min-height: 33px;
+
+  background: var(--group-header-bg);
+  border-top: 2px solid var(--group-header-br);
+  border-bottom: 2px solid var(--group-header-br);
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter .15s ease;
+}
+.group-row:hover { filter: brightness(0.97); }
+
+/* Treat the inner cells just like normal cells */
+.group-row .cell { display:flex; align-items:center; }
+.group-row .select-cell,
+.group-row .image-cell,
+.group-row .init-cell,
+.group-row .ac-cell,
+.group-row .hp-cell,
+.group-row .temp-hp-cell,
+.group-row .status-cell,
+.group-row .role-cell,
+.group-row .actions-cell,
+.group-row .dashboard-link-cell { justify-content: center; }
+.group-row .name-cell { justify-content: flex-start; }
+
+/* Folder "icon" that sits in the [IMG] column */
+.group-folder {
+  width: 28px; height: 20px; border-radius: 3px;
+  background: #e6d3a5;                 /* folder face */
+  border: 1px solid #c9b78a;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.2);
+}
+
+/* Group members keep the lighter green */
 #combatant-list-body > .tracker-table-row.in-group {
-  background-color: var(--group-bg) !important;
-  border-bottom: 1px solid var(--group-divider);
+  background: var(--group-member-bg) !important;
 }
-
-/* Keep a subtle hover on grouped children too */
 #combatant-list-body > .tracker-table-row.in-group:hover {
-  background-color: var(--group-bg-hover) !important;
+  background: var(--group-member-bg-hover) !important;
 }
 
-/* Kill zebra striping and the default blue selection inside groups */
-#combatant-list-body > .tracker-table-row.in-group.selected {
-  background-color: var(--group-bg-hover) !important;
-  outline: 2px solid var(--group-divider);   /* selection hint without blue fill */
-  outline-offset: -2px;
-}
-
-/* If you use “current turn” highlight, let it win visibly over group skin */
-#combatant-list-body > .tracker-table-row.in-group.current-turn {
-  background: #e8f5e9 !important;            /* your green turn color */
-  border-left: 4px solid #4CAF50;
-}
-
-/* Keep the indent behavior for grouped rows (unchanged) */
+/* Keep member indentation exactly like your screenshot */
+.tracker-table-row.in-group .select-cell { visibility: hidden; }
 .tracker-table-row.in-group .init-cell { display: none; }
 .tracker-table-row.in-group .image-cell {
-  grid-column: 2 / span 2;
+  grid-column: 2 / span 2;  /* IMG spans IMG+INIT */
   justify-content: flex-start;
-  padding-left: 15px;
+  padding-left: 90px;
+}
+.tracker-table-row.in-group .name-cell { padding-left: 10px; }
+
+
+.hint-banner {
+  display: none;
+  padding: 8px 12px;
+  background: #fff8d0;            /* soft yellow */
+  border-top: 1px solid #e2d48a;
+  border-bottom: 1px solid #e2d48a;
+  font-weight: 600;
+  color: #6b6000;
+}
+.hint-banner:not(.hidden) {
+  display: block;
 }
 
-.tracker-table-row.in-group .name-cell { padding-left: 20px; }
+
+#selectionCounter.flash { animation: flash 0.6s ease; }
+@keyframes flash {
+  0%,100% { background: transparent; }
+  30%     { background: #fff8d0; }
+}
+
 
 
 /* === MODAL & BULK ACTION STYLES (UNCHANGED) === */
@@ -250,5 +293,15 @@
 }
 
 
-/* === MODAL STYLES (FOR GROUPING) === */
-/* ... (modal styles follow) ... */
+/* INIT SORTING */
+.init-cell button {
+  background: none;
+  border: none;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+.init-cell button:hover {
+  color: #333;
+}

@@ -1,20 +1,20 @@
 // scripts/combat_tracker.js
 (() => {
   // ======= STATE =======
-  let combatants = [];                // mix of {type:'combatant'} and {type:'group', members:[]}
+  let combatants = [];                 // [{ type:'combatant' | 'group', ... }]
   let selectedCombatantIds = new Set();
   let isLocked = false;
 
   // ======= DOM =======
-  const $  = (sel, root = document) => root.querySelector(sel);
+  const $ = (sel) => document.querySelector(sel);
   const combatantListBody     = $('#combatant-list-body');
   const addCombatantBtn       = $('#addCombatantBtn');
   const addGroupBtn           = $('#addGroupBtn');
   const lockGroupSelectionBtn = $('#lockGroupSelectionBtn');
   const trackerTable          = $('#tracker-table');
-  const selectAllCheckbox     = $('#selectAllCheckbox');
-  const bulkActionsBar        = $('#bulkActionsBar');
-  const selectionCounter      = $('#selectionCounter');
+
+  const sortAscBtn            = $('#sort-init-asc');
+  const sortDescBtn           = $('#sort-init-desc');
 
   // ======= HELPERS =======
   const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -35,25 +35,38 @@
   }
 
   function addGroupByName(name) {
-    const g = { id: uid(), type: 'group', name, members: [] };
-    combatants.push(g);
-    return g;
+    const group = { id: uid(), type: 'group', name, members: [] };
+    combatants.push(group);
+    return group;
   }
 
-  // ======= UI STATE =======
+  function groupDisplayInit(group) {
+    // Show the highest INIT of members (or "—" if none)
+    if (!group?.members?.length) return '—';
+    let maxInit = null;
+    for (const m of group.members) {
+      const v = Number(m.init);
+      if (!Number.isFinite(v)) continue;
+      if (maxInit === null || v > maxInit) maxInit = v;
+    }
+    return maxInit === null ? '—' : String(maxInit);
+  }
+
+  // ======= UI SYNC =======
   function updateLockUI() {
     trackerTable?.classList.toggle('selection-locked', isLocked);
+    lockGroupSelectionBtn.innerHTML = isLocked
+      ? `🔓 <span class="label">Unlock Groups</span>`
+      : `🔒 <span class="label">Lock Groups</span>`;
     if (isLocked) {
-      lockGroupSelectionBtn.innerHTML = `🔓 <span class="label">Unlock Groups</span>`;
       selectedCombatantIds.clear();
-      render();
-    } else {
-      lockGroupSelectionBtn.innerHTML = `🔒 <span class="label">Lock Groups</span>`;
     }
+    // tell UI layer to re-mark
+    dispatchRenderEvent();
   }
 
-  function updateSelectionUI() {
-    // selection highlight + checkbox sync
+  function updateSelectionMarks() {
+    // local visual mark (GroupSelector will also re-mark)
     [...combatantListBody.querySelectorAll('.tracker-table-row')].forEach(row => {
       const id = row.dataset.id;
       const checked = selectedCombatantIds.has(id);
@@ -61,33 +74,38 @@
       const cb = row.querySelector('.select-cell input[type="checkbox"]');
       if (cb) cb.checked = checked;
     });
-
-    // bulk bar
-    const count = selectedCombatantIds.size;
-    selectionCounter && (selectionCounter.textContent = `${count} selected`);
-    if (bulkActionsBar) bulkActionsBar.classList.toggle('visible', count > 0 && !isLocked);
-
-    // select-all tri-state
-    if (selectAllCheckbox) {
-      const total = countAllCombatants();
-      if (total > 0 && count === total) {
-        selectAllCheckbox.checked = true; selectAllCheckbox.indeterminate = false;
-      } else if (count > 0) {
-        selectAllCheckbox.checked = false; selectAllCheckbox.indeterminate = true;
-      } else {
-        selectAllCheckbox.checked = false; selectAllCheckbox.indeterminate = false;
-      }
-    }
   }
 
-  function countAllCombatants() {
-    return combatants.reduce((n, item) =>
-      n + (item.type === 'combatant' ? 1 : (item.members?.length || 0)), 0);
+  function dispatchRenderEvent() {
+    // Notify group-selector.js to refresh its bulk bar/checkboxes
+    window.dispatchEvent(new CustomEvent('tracker:render'));
   }
 
   // ======= RENDER =======
   function render() {
     combatantListBody.innerHTML = '';
+
+    const renderGroupRow = (g) => {
+      // Render a group "row" aligned to table columns (same grid)
+      const row = document.createElement('div');
+      row.className = 'group-row';
+      row.dataset.id = g.id;
+      row.dataset.type = 'group';
+      row.innerHTML = `
+        <div class="cell select-cell"><!-- empty (reserved for alignment) --></div>
+        <div class="cell image-cell"><span class="group-folder" aria-hidden="true"></span></div>
+        <div class="cell init-cell">${groupDisplayInit(g)}</div>
+        <div class="cell name-cell">${g.name}</div>
+        <div class="cell ac-cell"><!-- empty --></div>
+        <div class="cell hp-cell"><!-- empty --></div>
+        <div class="cell temp-hp-cell"><!-- empty --></div>
+        <div class="cell status-cell"><!-- empty --></div>
+        <div class="cell role-cell"><!-- empty --></div>
+        <div class="cell actions-cell"><!-- empty --></div>
+        <div class="cell dashboard-link-cell"><!-- empty --></div>
+      `;
+      combatantListBody.appendChild(row);
+    };
 
     const renderCombatantRow = (c, isInGroup = false) => {
       const isSelected = selectedCombatantIds.has(c.id);
@@ -103,10 +121,10 @@
         <div class="cell init-cell">${c.init}</div>
         <div class="cell name-cell">${c.name}</div>
         <div class="cell ac-cell">${c.ac}</div>
-        <div class="cell hp-cell"><span class="hp-heart">❤️</span> <span>${c.hp} / ${c.maxHp}</span></div>
-        <div class="cell temp-hp-cell">${c.tempHp ?? 0}</div>
+        <div class="cell hp-cell"><span class="hp-heart">❤️</span><span>${c.hp} / ${c.maxHp}</span></div>
+        <div class="cell temp-hp-cell">${c.tempHp || 0}</div>
         <div class="cell status-cell"><button class="btn-add-status">+ Add</button></div>
-        <div class="cell role-cell">${(c.role || '').toUpperCase()}</div>
+        <div class="cell role-cell">${c.role?.toUpperCase?.() || ''}</div>
         <div class="cell actions-cell">
           <div class="btn-group">
             <button title="Edit">⚙️</button>
@@ -119,16 +137,7 @@
       combatantListBody.appendChild(row);
     };
 
-    const renderGroupRow = (g) => {
-      const row = document.createElement('div');
-      row.className = 'group-row';
-      row.dataset.id = g.id;
-      row.dataset.type = 'group';
-      row.innerHTML = `<span class="group-icon">📁</span><span class="group-name">${g.name}</span>`;
-      combatantListBody.appendChild(row);
-    };
-
-    // draw
+    // Draw top-level rows, then any group members
     combatants.forEach(item => {
       if (item.type === 'group') {
         renderGroupRow(item);
@@ -138,14 +147,16 @@
       }
     });
 
-    updateSelectionUI();
+    updateSelectionMarks();
+    dispatchRenderEvent(); // let UI layer resync bulk bar
   }
 
   // ======= DATA OPS =======
   function addDefaultCombatant() {
     const c = {
-      id: uid(), type: 'combatant',
-      name: `Combatant ${combatants.length + 1}`,
+      id: uid(),
+      type: 'combatant',
+      name: `Combatant ${countAllCombatants() + 1}`,
       init: 10, ac: 10, hp: 10, maxHp: 10, tempHp: 0,
       role: 'dm', imageUrl: '', dashboardId: null
     };
@@ -154,107 +165,194 @@
   }
 
   function createEmptyGroup() {
-    addGroupByName(`New Group ${allGroups().length + 1}`);
+    const group = addGroupByName(`New Group ${allGroups().length + 1}`);
     render();
+    return group;
   }
 
-  function removeFromEverywhereAndCollectSelected() {
-    const bag = [];
+  function countAllCombatants() {
+    let n = 0;
+    for (const i of combatants) {
+      if (i.type === 'combatant') n++;
+      if (i.type === 'group') n += (i.members?.length || 0);
+    }
+    return n;
+  }
 
-    // top-level
+  function removeSelectedEverywhereCollect() {
+    const collected = [];
+
+    // remove selected top-level combatants
     combatants = combatants.filter(item => {
       if (item.type === 'combatant' && selectedCombatantIds.has(item.id)) {
-        bag.push(item);
+        collected.push(item);
         return false;
       }
       return true;
     });
 
-    // inside groups
-    combatants.forEach(g => {
-      if (g.type === 'group') {
-        g.members = g.members.filter(m => {
-          if (selectedCombatantIds.has(m.id)) { bag.push(m); return false; }
+    // remove selected from any groups
+    combatants.forEach(group => {
+      if (group.type === 'group') {
+        group.members = group.members.filter(m => {
+          if (selectedCombatantIds.has(m.id)) {
+            collected.push(m);
+            return false;
+          }
           return true;
         });
       }
     });
 
-    return bag;
+    return collected;
   }
 
   function moveSelectedToGroup(targetGroupId) {
-    if (selectedCombatantIds.size === 0) return;
+    if (selectedCombatantIds.size === 0) return false;
 
     const { item: targetGroup } = findEntity(targetGroupId);
-    if (!targetGroup || targetGroup.type !== 'group') return;
+    if (!targetGroup || targetGroup.type !== 'group') return false;
 
-    const moving = removeFromEverywhereAndCollectSelected();
-    if (!moving.length) return;
+    const moving = removeSelectedEverywhereCollect();
+    if (moving.length === 0) return false;
 
     targetGroup.members.push(...moving);
     selectedCombatantIds.clear();
-    render();                   // 🔄 always redraw after a data change
+    render();
+    return true;
   }
+
+  function ungroupSelected() {
+    const toUngroup = [];
+    combatants.forEach(g => {
+      if (g.type === 'group') {
+        g.members = g.members.filter(m => {
+          if (selectedCombatantIds.has(m.id)) {
+            toUngroup.push(m);
+            return false;
+          }
+          return true;
+        });
+      }
+    });
+    if (toUngroup.length) {
+      combatants.push(...toUngroup);
+      selectedCombatantIds.clear();
+      render();
+    }
+  }
+
+  function deleteSelected() {
+    // Remove top-level selected combatants
+    combatants = combatants.filter(c => !(c.type === 'combatant' && selectedCombatantIds.has(c.id)));
+    // Remove from groups
+    combatants.forEach(g => {
+      if (g.type === 'group') {
+        g.members = g.members.filter(m => !selectedCombatantIds.has(m.id));
+      }
+    });
+    selectedCombatantIds.clear();
+    render();
+  }
+
+  function sortByInit(direction = 'desc') {
+    // Sort top-level combatants only (not inside groups), then
+    // within each group, sort members too. Keep groups where they are.
+    const cmp = (a, b) => {
+      const av = Number(a.init) || 0;
+      const bv = Number(b.init) || 0;
+      return direction === 'asc' ? av - bv : bv - av;
+    };
+
+    // stable split
+    const topGroups = combatants.filter(i => i.type === 'group');
+    const topSingles = combatants.filter(i => i.type === 'combatant').sort(cmp);
+
+    // sort members of each group
+    topGroups.forEach(g => {
+      g.members.sort(cmp);
+    });
+
+    combatants = [...topGroups, ...topSingles];
+    render();
+  }
+
+  // ======= PUBLIC API (used by group-selector.js) =======
+  window.CombatAPI = {
+    // data
+    getAllCombatants: () => combatants,
+    allGroups,
+    addGroupByName,
+
+    // selection
+    getSelectedIds: () => new Set(selectedCombatantIds),
+    setSelectedIds: (ids) => {
+      selectedCombatantIds = new Set(ids);
+      updateSelectionMarks();
+      dispatchRenderEvent();
+    },
+    clearSelection: () => {
+      selectedCombatantIds.clear();
+      updateSelectionMarks();
+      dispatchRenderEvent();
+    },
+
+    // actions
+    moveSelectedToGroup,
+    ungroupSelected,
+    deleteSelected,
+    render, // allow UI layer to force repaint
+    isLocked: () => isLocked,
+
+    // utility (optional)
+    addCombatant: addDefaultCombatant,
+    addGroup: createEmptyGroup,
+    sortByInit,
+    toggleLock: () => {
+      isLocked = !isLocked;
+      updateLockUI();
+      return isLocked;
+    }
+  };
 
   // ======= EVENTS =======
   addCombatantBtn?.addEventListener('click', addDefaultCombatant);
   addGroupBtn?.addEventListener('click', createEmptyGroup);
-  lockGroupSelectionBtn?.addEventListener('click', () => { isLocked = !isLocked; updateLockUI(); });
+  lockGroupSelectionBtn?.addEventListener('click', () => {
+    isLocked = !isLocked;
+    updateLockUI();
+  });
 
-  // Row checkbox selection (kept in this file so selection works without extra modules)
+  // Header INIT sort
+  sortAscBtn?.addEventListener('click', () => CombatAPI.sortByInit('asc'));
+  sortDescBtn?.addEventListener('click', () => CombatAPI.sortByInit('desc'));
+
+  // Per-row checkbox (kept here so selection still works if GroupSelector is missing)
   combatantListBody?.addEventListener('click', (e) => {
-    // Toggle selection via checkbox
-    if (e.target.matches('.combatant-checkbox')) {
-      if (isLocked) { e.target.checked = !e.target.checked; return; }
-      const id = e.target.dataset.id;
-      if (e.target.checked) selectedCombatantIds.add(id);
-      else selectedCombatantIds.delete(id);
-      updateSelectionUI();
-      return;
-    }
+    const cb = e.target.closest('.combatant-checkbox');
+    if (!cb) return;
 
-    // ======= MOVE LOGIC =======
-    // Instant move by clicking a group header (no prompt / no popup)
-    const groupRow = e.target.closest('.group-row');
-    if (groupRow) {
-      if (isLocked) return;
-      if (selectedCombatantIds.size === 0) return;
-      moveSelectedToGroup(groupRow.dataset.id);
-      // render() already called inside moveSelectedToGroup
-    }
+    if (isLocked) { e.preventDefault(); return; }
+    const id = cb.dataset.id;
+    if (!id) return;
+
+    if (cb.checked) selectedCombatantIds.add(id);
+    else selectedCombatantIds.delete(id);
+
+    updateSelectionMarks();
+    dispatchRenderEvent();
   });
 
-  // Select-all (optional here; if you manage it elsewhere, you can remove this)
-  selectAllCheckbox?.addEventListener('change', (e) => {
-    if (isLocked) { e.target.checked = !e.target.checked; return; }
-    selectedCombatantIds.clear();
-    if (e.target.checked) {
-      combatants.forEach(item => {
-        if (item.type === 'combatant') selectedCombatantIds.add(item.id);
-        else if (item.type === 'group') item.members.forEach(m => selectedCombatantIds.add(m.id));
-      });
-    }
-    render();
+  // Instant move: click a group header to move selected there (no prompts)
+  combatantListBody?.addEventListener('click', (e) => {
+    if (isLocked) return;
+    const row = e.target.closest('.group-row');
+    if (!row) return;
+    if (selectedCombatantIds.size === 0) return;
+    const moved = moveSelectedToGroup(row.dataset.id);
+    if (moved) render(); // ensure fresh DOM in case of partial reflow
   });
-
-  // ======= PUBLIC API (optional, for other modules) =======
-  window.CombatAPI = {
-    // data
-    getCombatants: () => combatants,
-    allGroups,
-    addGroupByName: (name) => { const g = addGroupByName(name); render(); return g; },
-    moveSelectedToGroup,
-    // selection
-    getSelectedIds: () => new Set(selectedCombatantIds),
-    setSelectedIds: (ids) => { selectedCombatantIds = new Set(ids); updateSelectionUI(); },
-    clearSelection: () => { selectedCombatantIds.clear(); updateSelectionUI(); },
-    isLocked: () => isLocked,
-    // UI
-    render,
-  };
 
   // ======= INIT =======
-  window.CombatTracker = { render, updateSelectionUI };
   render();
 })();

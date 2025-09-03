@@ -83,13 +83,23 @@
                         <button id="bulkGroupBtn">Move to Group</button>
                     </div>
                 </div>
+                
+                <!-- Hint shown after pressing “Move to Group” -->
+                <div id="choose-group-hint" class="hint-banner hidden">
+                👉 Please choose a group (click a group row) to move the selected combatants.
+                </div>
+
 
                 <div class="table-scroll-container">
                     <div id="tracker-table" class="tracker-table">
                         <div class="tracker-table-header">
                             <div class="cell select-cell"><input type="checkbox" id="selectAllCheckbox" title="Select All"></div>
                             <div class="cell image-cell">[img]</div>
-                            <div class="cell init-cell">[init]</div>
+                            <div class="cell init-cell">
+                                [init]
+                                <button id="sort-init-asc" aria-label="Sort init ascending">▲</button>
+                                <button id="sort-init-desc" aria-label="Sort init descending">▼</button>
+                            </div>
                             <div class="cell name-cell">[name]</div>
                             <div class="cell ac-cell">[ac]</div>
                             <div class="cell hp-cell">[hp/max]</div>
@@ -125,22 +135,20 @@
         </div>
     </div>
 
-    <!-- This is the required modal for the "Move to Group" button -->
     <div id="move-to-group-modal" class="modal-overlay hidden">
         <div class="modal-content">
             <h3>Move to Group</h3>
             <div class="form-group">
-                <label for="group-select">Select a group to move combatant(s) to:</label>
-                <select id="group-select">
-                    <!-- Options are populated by group-selector.js -->
-                </select>
+            <label for="group-select">Select a group to move combatant(s) to:</label>
+            <select id="group-select"></select>
             </div>
             <div class="modal-actions">
-                <button id="cancel-move-btn" class="btn">Cancel</button>
-                <button id="confirm-move-btn" class="btn">Confirm</button>
+            <button id="cancel-move-btn" class="btn">Cancel</button>
+            <button id="confirm-move-btn" class="btn">Confirm</button>
             </div>
         </div>
     </div>
+
 
 </body>
 </html>
