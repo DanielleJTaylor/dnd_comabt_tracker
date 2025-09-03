@@ -160,6 +160,26 @@
     <div id="dashboard-content-display" class="dashboard-content">
         <!-- Content will be populated by JavaScript -->
     </div>
+<!-- encounter.html -->
+
+<!-- ... (all other HTML before this) ... -->
+
+    <!-- ADD THIS ENTIRE MODAL AT THE END OF YOUR HTML, BEFORE </body> -->
+    <div id="move-to-group-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3>Move to Group</h3>
+            <div class="form-group">
+                <label for="group-select">Select a group to move the combatant(s) to:</label>
+                <select id="group-select">
+                    <!-- Options will be populated by JavaScript -->
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button id="cancel-move-btn" class="btn">Cancel</button>
+                <button id="confirm-move-btn" class="btn">Confirm</button>
+            </div>
+        </div>
+    </div>
 
 </body>
 </html>

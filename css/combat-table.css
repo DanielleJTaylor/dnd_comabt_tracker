@@ -183,9 +183,13 @@
 /* CORRECTED: Rules for combatants inside a group */
 /* This no longer redefines the --cols variable, ensuring it always matches the header. */
 
+/* === EXISTING .in-group RULES === */
+/* Your existing rules for .in-group are correct, but I'll list them here
+   for completeness. These indent the combatant and rearrange the columns. */
+
 /* 1. Hide the checkbox cell's content for grouped items */
 .tracker-table-row.in-group .select-cell {
-  visibility: hidden; /* Preserves the space to maintain alignment */
+  visibility: hidden;
 }
 
 /* 2. Hide the Initiative cell completely */
@@ -196,9 +200,10 @@
 /* 3. Make the Image cell span across the empty init column space */
 .tracker-table-row.in-group .image-cell {
   grid-column: 2 / span 2; /* Starts at grid line 2, spans 2 columns */
-  justify-content: flex-start; /* Aligns image to the left of the new, wider area */
+  justify-content: flex-start;
   padding-left: 15px; /* Creates the indent effect */
 }
+
 
 
 /* ... (rest of the file is unchanged) ... */
@@ -321,3 +326,34 @@
   box-sizing: border-box;
   font-family: 'Courier New', Courier, monospace;
 }
+
+
+/* ... (previous CSS rules are unchanged) ... */
+
+
+/* === GROUP ROW STYLES (NEW) === */
+.group-row {
+  /* This makes the group row span the entire table width */
+  grid-column: 1 / -1; 
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  background-color: #e6d3b0; /* A distinct but complementary color */
+  border-bottom: 2px solid #d0bfa2;
+  border-top: 2px solid #d0bfa2;
+  margin-top: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.group-row:hover {
+  background-color: #d0bfa2;
+}
+
+.group-row .group-icon {
+  margin-right: 12px;
+  font-size: 1.2em;
+}
+
+
