@@ -45,51 +45,19 @@
         });
     }
 
-    // ======= MODAL LOGIC =======
-    function openMoveModal() {
-        if (CombatAPI.isLocked() || CombatAPI.getSelectedIds().size === 0) return;
+    // ======= MOVE LOGIC =======
+    // instant move by clicking a group header
+    document.getElementById('combatant-list-body')?.addEventListener('click', (e) => {
+    if (CombatAPI.isLocked()) return;
+    const row = e.target.closest('.group-row');
+    if (!row) return;
+    if (CombatAPI.getSelectedIds().size === 0) return;
+    CombatAPI.moveSelectedToGroup(row.dataset.id);
+    
+    // 🔄 force DOM refresh
+    CombatAPI.render();
+    });
 
-        groupSelect.innerHTML = ''; // Clear old options
-        const groups = CombatAPI.getAllGroups();
-
-        if (groups.length === 0) {
-            const opt = document.createElement('option');
-            opt.value = '__new__'; // Special value to indicate creation
-            opt.textContent = '— Create a new group —';
-            groupSelect.appendChild(opt);
-        } else {
-            groups.forEach(g => {
-                const opt = document.createElement('option');
-                opt.value = g.id;
-                opt.textContent = g.name;
-                groupSelect.appendChild(opt);
-            });
-            // Add the "create new" option at the end
-            const newOpt = document.createElement('option');
-            newOpt.value = '__new__';
-            newOpt.textContent = '— Create a new group —';
-            groupSelect.appendChild(newOpt);
-        }
-        moveModal.classList.remove('hidden');
-    }
-
-    function closeMoveModal() {
-        moveModal.classList.add('hidden');
-    }
-
-    function confirmMove() {
-        const targetId = groupSelect.value;
-        if (targetId === '__new__') {
-            const name = prompt("Enter a name for the new group:", `New Group`);
-            if (name) {
-                const newGroup = CombatAPI.addGroupByName(name);
-                CombatAPI.moveSelectedToGroup(newGroup.id);
-            }
-        } else if (targetId) {
-            CombatAPI.moveSelectedToGroup(targetId);
-        }
-        closeMoveModal();
-    }
 
     // ======= EVENT LISTENERS (UI Layer) =======
     bulkGroupBtn.addEventListener('click', openMoveModal);
@@ -121,6 +89,9 @@
         }
         CombatAPI.setSelectedIds(newSelectedIds);
     });
+
+    
+
 
     // Modal button listeners
     cancelMoveBtn.addEventListener('click', closeMoveModal);

@@ -50,7 +50,6 @@
   transition: background-color .2s ease;
 }
 
-#combatant-list-body > .tracker-table-row:nth-child(even) { background: #fbf7eb; }
 #combatant-list-body > .tracker-table-row:hover { background:#f1f8ff; }
 
 /* === CELL ALIGNMENT & STYLES === */
@@ -70,40 +69,75 @@
   cursor: pointer; padding: 4px 8px; font-size: 0.8rem;
 }
 
-/* === SELECTION & LOCKING === */
+/* === SELECTION & SPECIAL STATES === */
 #combatant-list-body > .tracker-table-row.selected {
-  background-color: #e3f2fd !important;
+  background-color: #e3f2fd !important; /* Blue selection highlight */
 }
 #tracker-table.selection-locked .select-cell {
   visibility: hidden;
 }
+/* UPDATED: Added !important to ensure current turn always shows */
+#combatant-list-body > .tracker-table-row.current-turn {
+  background: #e8f5e9 !important; /* Green turn highlight */
+  border-left: 4px solid #4CAF50;
+}
 
-/* === GROUP STYLES === */
+
+/* === GROUP STYLES (MODIFIED FOR NEW LOOK) === */
+/* === Unified “group” skin for header + children === */
+
+/* Pick ONE dark folder tone and reuse it everywhere */
+:root {
+  --group-bg: #d0bfa2;        /* darker brown you use on the folder bar */
+  --group-bg-hover: #c5b294;  /* hover a hair darker */
+  --group-divider: #b6a488;   /* thin separators that still read on brown */
+}
+
+/* Group header (folder row) */
 .group-row {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  padding: 8px 16px;
-  background-color: #e6d3b0;
-  border-top: 2px solid #d0bfa2;
-  border-bottom: 2px solid #d0bfa2;
-  font-weight: bold;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
+  background-color: var(--group-bg) !important;
+  border-top: 2px solid var(--group-divider);
+  border-bottom: 2px solid var(--group-divider);
 }
-.group-row:hover { background-color: #d0bfa2; }
-.group-row .group-icon { margin-right: 12px; font-size: 1.2em; }
+.group-row:hover { background-color: var(--group-bg-hover) !important; }
 
+/* Every combatant that belongs to a group */
 #combatant-list-body > .tracker-table-row.in-group {
-  background-color: #f3e9d4 !important;
-  border-left: 4px solid #d0bfa2;
+  background-color: var(--group-bg) !important;
+  border-bottom: 1px solid var(--group-divider);
 }
+
+/* Keep a subtle hover on grouped children too */
+#combatant-list-body > .tracker-table-row.in-group:hover {
+  background-color: var(--group-bg-hover) !important;
+}
+
+/* Kill zebra striping and the default blue selection inside groups */
+#combatant-list-body > .tracker-table-row.in-group.selected {
+  background-color: var(--group-bg-hover) !important;
+  outline: 2px solid var(--group-divider);   /* selection hint without blue fill */
+  outline-offset: -2px;
+}
+
+/* If you use “current turn” highlight, let it win visibly over group skin */
+#combatant-list-body > .tracker-table-row.in-group.current-turn {
+  background: #e8f5e9 !important;            /* your green turn color */
+  border-left: 4px solid #4CAF50;
+}
+
+/* Keep the indent behavior for grouped rows (unchanged) */
 .tracker-table-row.in-group .init-cell { display: none; }
 .tracker-table-row.in-group .image-cell {
   grid-column: 2 / span 2;
   justify-content: flex-start;
   padding-left: 15px;
 }
+
+.tracker-table-row.in-group .name-cell { padding-left: 20px; }
+
+
+/* === MODAL & BULK ACTION STYLES (UNCHANGED) === */
+/* ... (the rest of your CSS for the modal and bulk actions bar is correct) ... */
 
 /* === MODAL STYLES (FOR GROUPING) === */
 /* css/combat-table.css */
