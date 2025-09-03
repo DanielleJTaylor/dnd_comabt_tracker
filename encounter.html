@@ -1,27 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF--8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet"  href="css/tracker.css">
-    <link rel="stylesheet"  href="css/combat-table.css">
-    <link rel="stylesheet"  href="css/link-sheet.css">
+    <title>DnD Sidekick</title>
+    <link rel="icon" type="image/png" href="images/icon.png">
+
+    <!-- CSS Links -->
+    <link rel="stylesheet" href="css/tracker.css">
+    <link rel="stylesheet" href="css/combat-table.css">
+    <link rel="stylesheet" href="css/link-sheet.css">
+
+    <!-- JavaScript files (deferred to load after HTML) -->
     <script src="scripts/app.js" defer></script>
     <script src="scripts/history-log.js" defer></script>
     <script src="scripts/combat_tracker.js" defer></script>
     <script src="scripts/group-selector.js" defer></script>
     <script src="scripts/link-sheet.js" defer></script>
     <script src="scripts/dashboard.js" defer></script>
-    <title>DnD Sidekick</title>
-    <link rel="icon" type="image/png" href="images/icon.png">
-
 </head>
 <body>
-    <!-- Conatiner for entire page -->
-    <!-- Add class "dashboard-visible" to #app-container to expand the left panel (≈45%) and shrink the right panel (≈55%) -->
+    <!-- Main container for the two-panel layout -->
+    <!-- Add class "dashboard-visible" to this div to show the right panel -->
     <div id="app-container">
 
-        <!-- LEFT: Dashboards panel -->
+        <!-- RIGHT: Dashboards panel (Initially hidden) -->
         <section id="right-dashboard">
             <div id="dashboard-header">
                 <h3>📁 Dashboards</h3>
@@ -32,113 +35,111 @@
                 <button id="newFolderBtn">📁 New Folder</button>
             </div>
             
-            <!-- Optional: list container goes here -->
-             <div id="dashboard-list-container" class="dashboard-list"></div>
+            <!-- Dashboard items will be rendered here by JavaScript -->
+            <div id="dashboard-list-container" class="dashboard-list"></div>
         </section>
 
-
-
-        <!-- RIGHT: Tracker panel -->
+        <!-- LEFT: Main Tracker panel -->
         <section id="left-tracker">
 
-        <header class="tracker-header">
-            <!-- GROUP 1: Items for the left side -->
-            <div class="header-left-group">
-                <button class="back-btn" onclick="history.back()">⬅ Back</button>
-                <h1>🧝‍♂️ D&D Combat Tracker</h1>
-            </div>
+            <header class="tracker-header">
+                <!-- Left side of the header -->
+                <div class="header-left-group">
+                    <button class="back-btn" onclick="history.back()">⬅ Back</button>
+                    <h1>🧝‍♂️ D&D Combat Tracker</h1>
+                </div>
 
-            <!-- ADD this wrapper around the theme switch + button group -->
-            <div class="header-right-controls">        <!-- ← ADD -->
-                <label class="theme-switch">
-                <input type="checkbox" id="themeToggle" />
-                <span class="slider"></span>
-                </label>
+                <!-- Right side of the header -->
+                <div class="header-right-controls">
+                    <label class="theme-switch">
+                        <input type="checkbox" id="themeToggle" />
+                        <span class="slider"></span>
+                    </label>
 
-            <!-- HEADER buttons -->
-            <div class="button-group">
-                <button id="addCombatantBtn" class="btn">➕ <span class="label">Add Combatant</span></button>
-                <button id="addGroupBtn" class="btn">➕ <span class="label">Add Group</span></button>
-                <button id="startEncounterBtn" class="btn">▶ <span class="label">Reset Encounter</span></button>
-            </div>
-            </div> 
-        </header>
+                    <div class="button-group">
+                        <button id="addCombatantBtn" class="btn">➕ <span class="label">Add Combatant</span></button>
+                        <button id="addGroupBtn" class="btn">➕ <span class="label">Add Group</span></button>
+                        <button id="startEncounterBtn" class="btn">▶ <span class="label">Reset Encounter</span></button>
+                    </div>
+                </div> 
+            </header>
 
-        <main class="tracker-wrapper">
-            <!-- In your .controls-row -->
-            <div class="controls-row">
-            <button id="lockGroupSelectionBtn" class="btn">🔒 <span class="label">Lock Groups</span></button>
-            <button id="historyLogBtn" class="btn">📜 <span class="label">History</span></button>
-            <span id="roundCounter">Round: 1</span>
-            <button class="btn">⬅ <span class="label">Prev Turn</span></button>
-            <div id="currentTurnDisplay">🟢 Current Turn: <strong>None</strong></div>
-            <button class="btn">➡ <span class="label">Next Turn</span></button>
-            <button class="btn">💾 <span class="label">Save</span></button>
-            <button class="btn">📂 <span class="label">Load</span></button>
-            <button class="btn">🗑️ <span class="label">Clear</span></button>
+            <main class="tracker-wrapper">
+                <!-- Secondary row of controls -->
+                <div class="controls-row">
+                    <button id="lockGroupSelectionBtn" class="btn">🔒 <span class="label">Lock Groups</span></button>
+                    <button id="historyLogBtn" class="btn">📜 <span class="label">History</span></button>
+                    <span id="roundCounter">Round: 1</span>
+                    <button class="btn">⬅ <span class="label">Prev Turn</span></button>
+                    <div id="currentTurnDisplay">🟢 Current Turn: <strong>None</strong></div>
+                    <button class="btn">➡ <span class="label">Next Turn</span></button>
+                    <button class="btn">💾 <span class="label">Save</span></button>
+                    <button class="btn">📂 <span class="label">Load</span></button>
+                    <button class="btn">🗑️ <span class="label">Clear</span></button>
 
-            <button id="seeDashboardsBtn" class="btn">📋 <span class="label">Dashboards</span></button>
-            </div>
+                    <button id="seeDashboardsBtn" class="btn">📋 <span class="label">Dashboards</span></button>
+                </div>
 
-            
-        <div id="bulkActionsBar" class="bulk-actions-bar">
-        <label class="select-all">
-            <input type="checkbox" id="selectAllCheckbox"> Select All
-        </label>
+                <!-- Bulk actions bar, shown when items are selected -->
+                <div id="bulkActionsBar" class="bulk-actions-bar">
+                    <span id="selectionCounter">0 selected</span>
+                    <div class="bulk-actions-actions">
+                        <button id="bulkDamageHealBtn">Damage / Heal Selected</button>
+                        <button id="bulkDeleteBtn">Delete Selected</button>
+                        <button id="bulkGroupBtn">Move to Group</button>
+                    </div>
+                </div>
 
-        <span id="selectionCounter">0 selected</span>
-
-        <div class="bulk-actions-actions">
-            <button id="bulkDamageHealBtn">Damage / Heal Selected</button>
-            <button id="bulkDeleteBtn">Delete Selected</button>
-            <button id="bulkGroupBtn">Move to Group</button>
-        </div>
-        </div>
-
-
-        <div class="table-scroll-container">
-        <div id="tracker-table" class="tracker-table">
-            <div class="tracker-table-header">
-                <div class="cell image-cell">[img]</div>
-                <div class="cell">[init]</div>
-                <div class="cell">[name]</div>
-                <div class="cell">[ac]</div>
-                <div class="cell">[hp/max]</div>
-                <div class="cell">[tempHp]</div>
-                <div class="cell">[status tags]</div>
-                <div class="cell">[role]</div>
-                <div class="cell">[buttons/actions]</div>
-                <div class="cell">[dashboard link]</div>
-            </div>
-            <!-- This is where the combatant rows will be rendered -->
-            <div id="combatant-list-body"></div>
-        </div>
-        </div>
-        </main>
-    </section>
-  </div>
-
-  <section id="trackerContainer" class="tracker-log-panel"> 
-    <div id="historyLogContent" class="log-content"></div> 
-  </section>
-  
-  <div id="hpPopup" class="popup hidden"> 
-    <div class="popup-content">
-        <h3>Adjust HP</h3> 
-        <div class="hp-popup-field"><label for="healingInput">Healing:</label><input type="number" id="healingInput" min="0" placeholder="e.g., 10" /></div> 
-        <div class="hp-popup-field"><label for="damageInput">Damage:</label><input type="number" id="damageInput" min="0" placeholder="e.g., 15" /></div> 
-        <div class="hp-popup-field"><label for="addTempHpInput">Add Temp HP:</label><input type="number"id="addTempHpInput" min="0" placeholder="e.g., 5" /></div>
-        <div class="hp-popup-field">
-            <label for="tempHpDurationInput">Duration (rounds):</label>
-            <input type="number" id="tempHpDurationInput" min="1" placeholder="Infinity" />
-        </div>
-        <button onclick="applyHpChange()">Apply</button> 
+                <!-- Scrolling container for the combatant table -->
+                <div class="table-scroll-container">
+                    <!-- encounter.html -->
+                    <!-- ... inside the <div class="table-scroll-container"> ... -->
+                    <div id="tracker-table" class="tracker-table">
+                        <div class="tracker-table-header">
+                            <!-- UPDATED: Added .cell-center to all headers that should be centered -->
+                            <div class="cell select-cell cell-center">
+                                <input type="checkbox" id="selectAllCheckbox" title="Select All">
+                            </div>
+                            <div class="cell image-cell cell-center">[img]</div>
+                            <div class="cell init-cell cell-center">[init]</div>
+                            <div class="cell name-cell">[name]</div>
+                            <div class="cell ac-cell cell-center">[ac]</div>
+                            <div class="cell hp-cell cell-center">[hp/max]</div>
+                            <div class="cell temp-hp-cell cell-center">[tempHp]</div>
+                            <div class="cell status-cell cell-center">[status tags]</div>
+                            <div class="cell role-cell cell-center">[role]</div>
+                            <div class="cell actions-cell cell-center">[buttons/actions]</div>
+                            <div class="cell dashboard-link-cell cell-center">[dashboard link]</div>
+                        </div>
+                        <!-- Combatant rows will be rendered here by JavaScript -->
+                        <div id="combatant-list-body"></div>
+                    </div>
+                </div>
+            </main>
+        </section>
     </div>
-  </div>
 
-    <!-- ADD THIS AT THE END OF YOUR HTML, BEFORE </body> -->
+    <!-- History Log Panel (slides up from bottom right) -->
+    <section id="trackerContainer" class="tracker-log-panel"> 
+        <div id="historyLogContent" class="log-content"></div> 
+    </section>
+    
+    <!-- HP Adjustment Popup (hidden by default) -->
+    <div id="hpPopup" class="popup hidden"> 
+        <div class="popup-content">
+            <h3>Adjust HP</h3> 
+            <div class="hp-popup-field"><label for="healingInput">Healing:</label><input type="number" id="healingInput" min="0" placeholder="e.g., 10" /></div> 
+            <div class="hp-popup-field"><label for="damageInput">Damage:</label><input type="number" id="damageInput" min="0" placeholder="e.g., 15" /></div> 
+            <div class="hp-popup-field"><label for="addTempHpInput">Add Temp HP:</label><input type="number"id="addTempHpInput" min="0" placeholder="e.g., 5" /></div>
+            <div class="hp-popup-field">
+                <label for="tempHpDurationInput">Duration (rounds):</label>
+                <input type="number" id="tempHpDurationInput" min="1" placeholder="Infinity" />
+            </div>
+            <button onclick="applyHpChange()">Apply</button> 
+        </div>
+    </div>
 
-    <!-- Modal for Linking a Dashboard -->
+    <!-- Modal for Linking a Dashboard (hidden by default) -->
     <div id="link-dashboard-modal" class="modal-overlay hidden">
         <div class="modal-content">
             <h3 id="link-modal-title">Link Dashboard</h3>
@@ -155,7 +156,7 @@
         </div>
     </div>
 
-    <!-- Add a container for displaying the sheet content in the left panel -->
+    <!-- Container for displaying sheet content -->
     <div id="dashboard-content-display" class="dashboard-content">
         <!-- Content will be populated by JavaScript -->
     </div>

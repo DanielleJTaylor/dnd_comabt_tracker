@@ -1,39 +1,85 @@
-/* scripts/combat_tracker.js
-   Minimal combat tracker logic for your current HTML
-*/
+/* scripts/combat_tracker.js */
 
 (() => {
-
     // ======= STATE =======
-    let combatants = [];  // List of combatants
+    let combatants = [];
+    let selectedCombatantIds = new Set();
+    let isLocked = false; // ADDED: State for the lock button
 
-    // ✅ Expose so group-selector.js can read it
-    window.CombatState = { combatants };
+    window.CombatState = { combatants, selectedCombatantIds, isLocked };
 
-    let round = 1;        // Current round of combat
-    let currentTurnIndex = 0;  // The index of the current combatant's turn
+    let round = 1;
+    let currentTurnIndex = -1;
 
     // ======= DOM ELEMENT SELECTIONS =======
-    // It's good practice to select all your needed elements at the top
     const $ = (sel, root = document) => root.querySelector(sel);
-    const combatantListBody = $('#combatant-list-body'); // CORRECT: Select the correct body element
-    const trackerContainer = $('#trackerContainer');
+    const $$ = (sel, root = document) => root.querySelectorAll(sel);
+    
+    const combatantListBody = $('#combatant-list-body');
     const addCombatantBtn = $('#addCombatantBtn');
-
+    
+    const bulkActionsBar = $('#bulkActionsBar');
+    const selectionCounter = $('#selectionCounter');
+    const selectAllCheckbox = $('#selectAllCheckbox');
+    
+    // ADDED: Selections for the new functionality
+    const lockGroupSelectionBtn = $('#lockGroupSelectionBtn');
+    const trackerTable = $('#tracker-table');
 
     // ======= FUNCTIONS =======
 
+    /**
+     * Updates the UI of the lock button based on the isLocked state.
+     */
+    function updateLockUI() {
+        trackerTable.classList.toggle('selection-locked', isLocked);
+        if (isLocked) {
+            lockGroupSelectionBtn.innerHTML = `🔓 <span class="label">Unlock Groups</span>`;
+            // When locking, clear existing selections for a clean UI state
+            selectedCombatantIds.clear();
+            render(); // Re-render to clear checkboxes visually
+        } else {
+            lockGroupSelectionBtn.innerHTML = `🔒 <span class="label">Lock Groups</span>`;
+        }
+    }
+    
+    /**
+     * Updates all UI elements related to selection.
+     */
+    function updateSelectionUI() {
+        const selectionCount = selectedCombatantIds.size;
+        const totalCombatants = combatants.length;
 
-    // scripts/combat_tracker.js
+        selectionCounter.textContent = `${selectionCount} selected`;
+        
+        // Don't show the bar if the UI is locked
+        bulkActionsBar.classList.toggle('visible', selectionCount > 0 && !isLocked);
+
+        if (totalCombatants > 0 && selectionCount === totalCombatants) {
+            selectAllCheckbox.checked = true;
+            selectAllCheckbox.indeterminate = false;
+        } else if (selectionCount > 0) {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = true;
+        } else {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+        }
+
+        $$('.tracker-table-row', combatantListBody).forEach(row => {
+            row.classList.toggle('selected', selectedCombatantIds.has(row.dataset.id));
+        });
+    }
 
     /**
-     * Renders the entire list of combatants to the screen.
+     * Renders the entire list of combatants.
      */
     function render() {
         combatantListBody.innerHTML = '';
 
         if (combatants.length === 0) {
-            combatantListBody.innerHTML = '<div class="empty-message">No combatants. Click "+ Add Combatant" to begin.</div>';
+            combatantListBody.innerHTML = '<div class="empty-message">No combatants.</div>';
+            updateSelectionUI();
             return;
         }
 
@@ -41,82 +87,105 @@
             const row = document.createElement('div');
             
             const isCurrentTurn = (index === currentTurnIndex);
+            const isSelected = selectedCombatantIds.has(c.id);
+
             row.className = `tracker-table-row ${isCurrentTurn ? 'current-turn' : ''}`;
             row.dataset.id = c.id;
 
-            // CORRECTED: This now creates all 10 cells to match your CSS grid
             row.innerHTML = `
-                <div class="cell image-cell">
+                <div class="cell select-cell">
+                    <input type="checkbox" class="combatant-checkbox" data-id="${c.id}" ${isSelected ? 'checked' : ''}>
+                </div>
+                <div class="cell image-cell cell-center">
                     <img src="${c.imageUrl || 'images/icon.png'}" alt="${c.name}">
                 </div>
-                <div class="cell init-cell">${c.init}</div>
+                <div class="cell init-cell cell-center">${c.init}</div>
                 <div class="cell name-cell">${c.name}</div>
-                <div class="cell ac-cell">${c.ac}</div>
-                <div class="cell hp-cell">
+                <div class="cell ac-cell cell-center">${c.ac}</div>
+                <div class="cell hp-cell cell-center">
                     <span class="hp-heart">❤️</span>
                     <span>${c.hp} / ${c.maxHp}</span>
                 </div>
-                <div class="cell temp-hp-cell">${c.tempHp || 0}</div>
+                <div class="cell temp-hp-cell cell-center">${c.tempHp || 0}</div>
                 <div class="cell status-cell">
                     <button class="btn-add-status">+ Add</button>
                 </div>
-                <div class="cell role-cell">${c.role.toUpperCase()}</div>
-                <div class="cell actions-cell">
+                <div class="cell role-cell cell-center">${c.role.toUpperCase()}</div>
+                <div class="cell actions-cell cell-center">
                     <div class="btn-group">
                         <button data-action="edit" title="Edit">⚙️</button>
                         <button data-action="notes" title="Notes">📝</button>
                         <button data-action="delete" title="Delete">🗑️</button>
                     </div>
                 </div>
-                <div class="cell dashboard-link-cell">
+                <div class="cell dashboard-link-cell cell-center">
                     <button data-action="toggle-dashboard" title="Toggle Dashboard">📄</button>
                 </div>
             `;
 
             combatantListBody.appendChild(row);
         });
+        
+        updateSelectionUI();
     }
 
-
-    // Simple unique id
     const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
-
-    /**
-     * Adds a new combatant with default values to the state.
-     */
     function addDefaultCombatant() {
+        const combatantCount = combatants.length;
         const c = {
-            id: uid(),
-            name: `Combatant ${combatants.length + 1}`,
-            init: 10,
-            ac: 10,
-            hp: 10,
-            maxHp: 10,
-            tempHpSources: [],
-            role: 'dm',
-            imageUrl: '',
-            dashboardId: null // <-- ADD THIS LINE
+            id: uid(), name: `Combatant ${combatantCount + 1}`, init: 10, ac: 10,
+            hp: 10, maxHp: 10, tempHp: 0, tempHpSources: [],
+            role: 'dm', imageUrl: '', dashboardId: null
         };
         combatants.unshift(c);
-        HistoryLog.log(`➕ Added ${c.name}.`);   // ✅ use HistoryLog
-
-        render(); // Re-render the list to show the new addition
+        render();
     }
 
-
-
     // ======= EVENT LISTENERS =======
+
     addCombatantBtn.addEventListener('click', addDefaultCombatant);
 
-    // In scripts/combat_tracker.js, inside the IIFE, near the end
+    combatantListBody.addEventListener('click', (e) => {
+        if (e.target.matches('.combatant-checkbox')) {
+            // Do nothing if the UI is locked
+            if (isLocked) {
+                e.target.checked = !e.target.checked; // Prevent visual change
+                return;
+            }
+            const id = e.target.dataset.id;
+            if (e.target.checked) {
+                selectedCombatantIds.add(id);
+            } else {
+                selectedCombatantIds.delete(id);
+            }
+            updateSelectionUI();
+        }
+    });
 
-    // Expose necessary functions for other modules to use
-    window.CombatTracker = {
-        render // <-- ADD THIS LINE
-    };
+    selectAllCheckbox.addEventListener('change', (e) => {
+        if (isLocked) return; // Ignore if locked
+        const isChecked = e.target.checked;
+        combatants.forEach(c => {
+            if (isChecked) selectedCombatantIds.add(c.id);
+            else selectedCombatantIds.clear();
+        });
+        render();
+    });
 
-    // Initial render on load
+    // ADDED: Event listener for the lock button
+    lockGroupSelectionBtn.addEventListener('click', () => {
+        isLocked = !isLocked; // Toggle the state
+        updateLockUI(); // Update the UI based on the new state
+    });
+
+    // ======= GLOBAL EXPOSURE & INITIALIZATION =======
+    window.CombatTracker = { render, updateSelectionUI };
+
+    addDefaultCombatant();
+    addDefaultCombatant();
+    addDefaultCombatant();
+    addDefaultCombatant();
     render();
 
-    })();
+})();

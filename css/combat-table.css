@@ -20,20 +20,21 @@
 #tracker-table {
   box-sizing: border-box;
   width: 95%;
-  min-width: 1100px; /* ADDED: Ensures columns don't get too crushed */
+  min-width: 1150px;
 
-  /* Grid column definitions */
+  /* UPDATED: Adjusted the fr units for Name and Status Tags */
   --cols:
+    minmax(40px, 0.4fr)  /* [SELECT] */
     minmax(60px, 0.7fr)   /* [IMG] */
     minmax(56px, 0.7fr)   /* [INIT] */
-    minmax(120px, 2fr)    /* [NAME] */
+    minmax(120px, 1.5fr)  /* [NAME] - REDUCED from 2fr */
     minmax(60px, 0.7fr)   /* [AC] */
     minmax(120px, 1.1fr)  /* [HP/MAX] */
     minmax(70px, 0.8fr)   /* [TEMPHP] */
-    minmax(160px, 1.6fr)  /* [STATUS TAGS] */
+    minmax(160px, 2fr)    /* [STATUS TAGS] - INCREASED from 1.6fr */
     minmax(84px, 0.4fr)   /* [ROLE] */
     minmax(150px, 1.2fr)  /* [BUTTONS/ACTIONS] */
-    minmax(60px, 0.5fr);  /* [DASHBOARD LINK] - Adjusted size */
+    minmax(60px, 0.5fr);  /* [DASHBOARD LINK] */
 }
 
 /* This shared rule applies the grid structure to both the header and the rows */
@@ -72,6 +73,11 @@
 #combatant-list-body > .tracker-table-row .cell { background: inherit; }
 
 
+/* css/combat-table.css */
+
+/* ... (previous CSS rules are unchanged) ... */
+
+
 /* === CELL STYLES === */
 .cell { 
   display:flex; 
@@ -79,10 +85,29 @@
   padding: 2px 4px; 
 }
 
-/* NEW: Utility class for centered content to ensure header and rows match */
-.cell-center {
+/* REMOVED: The .cell-center utility class is no longer needed. */
+/* .cell-center { justify-content: center; } */
+
+/* CONSOLIDATED ALIGNMENT RULES: This is the new single source of truth. */
+/* It ensures that header cells and row cells with the same class are always aligned. */
+.select-cell,
+.image-cell,
+.init-cell,
+.ac-cell,
+.hp-cell,
+.temp-hp-cell,
+.status-cell,
+.role-cell,
+.actions-cell,
+.dashboard-link-cell {
   justify-content: center;
 }
+
+.name-cell { 
+  justify-content: flex-start; /* Only the name cell should be left-aligned */
+  font-weight:700; 
+}
+
 
 .image-cell img { 
   width:60px; 
@@ -90,10 +115,22 @@
   border-radius:50%; 
   object-fit:cover; 
 }
-.name-cell { 
-  justify-content:flex-start; 
-  font-weight:700; 
+
+/* REMOVED: This old grouped rule is now handled by the consolidated rules above. */
+/*
+.actions-cell,
+.status-cell,
+.ac-cell,
+.hp-cell,
+.init-cell,
+.role-cell,
+.temp-hp-cell,
+.dashboard-link-cell { 
+  justify-content:center; 
 }
+*/
+
+/* ... (rest of the file is unchanged) ... */
 
 /* --- Special Content Inside Cells --- */
 .hp-cell {
@@ -130,6 +167,10 @@
   gap: 4px;
 }
 
+/* css/combat-table.css */
+
+/* ... (previous CSS rules are correct) ... */
+
 
 /*
 ██╗██████╗ ██╗   ██╗██████╗ ███████╗██████╗ 
@@ -139,33 +180,28 @@
 ██║██████╔╝╚██████╔╝██║     ███████╗██║  ██║
 ╚═╝╚═════╝  ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═╝
 */
-/* NEW: Rules for combatants inside a group */
+/* CORRECTED: Rules for combatants inside a group */
+/* This no longer redefines the --cols variable, ensuring it always matches the header. */
 
-.tracker-table-row.in-group {
-  /* This redefines the grid columns ONLY for grouped rows */
-  --cols:
-    minmax(60px, 0.7fr)   /* Span Area 1 */
-    minmax(56px, 0.7fr)   /* Span Area 2 */
-    minmax(120px, 2fr)    /* [NAME] */
-    minmax(60px, 0.7fr)   /* [AC] */
-    minmax(120px, 1.1fr)  /* [HP/MAX] */
-    minmax(70px, 0.8fr)   /* [TEMPHP] */
-    minmax(160px, 1.6fr)  /* [STATUS TAGS] */
-    minmax(84px, 0.4fr)   /* [ROLE] */
-    minmax(150px, 1.2fr)  /* [BUTTONS/ACTIONS] */
-    minmax(60px, 0.5fr);  /* [DASHBOARD LINK] */
+/* 1. Hide the checkbox cell's content for grouped items */
+.tracker-table-row.in-group .select-cell {
+  visibility: hidden; /* Preserves the space to maintain alignment */
 }
 
-/* 1. Hide the Initiative cell */
+/* 2. Hide the Initiative cell completely */
 .tracker-table-row.in-group .init-cell {
   display: none;
 }
 
-/* 2. Make the Image cell span across the first two columns */
+/* 3. Make the Image cell span across the empty init column space */
 .tracker-table-row.in-group .image-cell {
-  grid-column: 1 / span 2; /* Starts at column 1, spans 2 columns */
-  justify-content: center; /* Center the image in the new wider cell */
+  grid-column: 2 / span 2; /* Starts at grid line 2, spans 2 columns */
+  justify-content: flex-start; /* Aligns image to the left of the new, wider area */
+  padding-left: 15px; /* Creates the indent effect */
 }
+
+
+/* ... (rest of the file is unchanged) ... */
 
 /* 3. Indent the Name cell */
 .tracker-table-row.in-group .name-cell {
@@ -183,7 +219,7 @@
   gap: 0.75rem 1rem;
   width: 100%;
   box-sizing: border-box;
-  padding: 0.75rem 1rem;
+  padding: 0.4rem 1rem;
   background-color: #f6e4c1;
   border-top: 2px solid #d0bfa2;
   border-bottom: 2px solid #d0bfa2;
@@ -231,6 +267,31 @@
     overflow-x: visible;
   }
 }
+
+/* ADDED: Visual indicator for a selected row */
+#combatant-list-body > .tracker-table-row.selected {
+  background-color: #e3f2fd !important; /* Use !important to override hover/nth-child */
+}
+
+#combatant-list-body > .tracker-table-row:nth-child(even) { background: #fbf7eb; }
+
+/* ... rest of file is unchanged ... */
+
+.select-cell {
+  justify-content: center;
+}
+
+.select-cell input {
+  transform: scale(1.2); /* Makes checkbox slightly larger */
+  cursor: pointer;
+}
+
+/* ADDED: New rule block for the locked state */
+/* When the table is locked, hide the contents of the select-cell */
+#tracker-table.selection-locked .select-cell {
+  visibility: hidden; /* Hides content but preserves space, preventing layout shift */
+}
+
 
 /* === TRACKER LOG PANEL === */
 .tracker-log-panel {
