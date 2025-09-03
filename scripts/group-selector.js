@@ -1,156 +1,213 @@
 // scripts/group-selector.js
-// Handles multi-select, "Select All", bulk Damage/Heal, bulk Delete, and Move to Group.
-// Also supports a lock/unlock mode that hides/disables selection.
+// Selection + bulk actions + Move-to-Group UI (modal) + click-group-row to move.
 
 (() => {
-  // --------- Grab DOM ----------
   const $ = (sel, root = document) => root.querySelector(sel);
 
-  const combatantListBody   = $('#combatant-list-body');
-  const bulkActionsBar      = $('#bulkActionsBar');
-  const selectAllCheckbox   = $('#selectAllCheckbox');
-  const selectionCounter    = $('#selectionCounter');
-  const bulkDamageHealBtn   = $('#bulkDamageHealBtn');
-  const bulkDeleteBtn       = $('#bulkDeleteBtn');
-  const bulkGroupBtn        = $('#bulkGroupBtn');
-  const lockBtn             = $('#lockGroupSelectionBtn'); // header lock/unlock button (optional)
+  // --- DOM ---
+  const combatantListBody = $('#combatant-list-body');
+  const bulkActionsBar    = $('#bulkActionsBar');
+  const selectAllCheckbox = $('#selectAllCheckbox');
+  const selectionCounter  = $('#selectionCounter');
+  const bulkDamageHealBtn = $('#bulkDamageHealBtn');
+  const bulkDeleteBtn     = $('#bulkDeleteBtn');
+  const bulkGroupBtn      = $('#bulkGroupBtn');       // ← Move to Group (uses modal)
+  const lockBtn           = $('#lockGroupSelectionBtn');
 
-  // --------- State ----------
-  // We keep selection state here; combatants come from your main tracker.
-  const selected = new Set();
+  // Modal pieces (already in your HTML)
+  const moveModal     = document.getElementById('move-to-group-modal');
+  const groupSelect   = document.getElementById('group-select');
+  const cancelMoveBtn = document.getElementById('cancel-move-btn');
+  const confirmBtn    = document.getElementById('confirm-move-btn');
+
+  // --- State (UI-only selection; sync with CombatAPI) ---
+  const selected = new Set();   // holds combatant ids
   let locked = false;
 
-  // If your main tracker does not expose combatants, this shim tries to find them.
-  // Prefer: window.CombatState = { get combatants() { return yourArray; } }
-  const getCombatants = () => {
-    if (window.CombatState && Array.isArray(window.CombatState.combatants)) {
-      return window.CombatState.combatants;
-    }
-    // Fallback: your render() may close over an internal array; expose it if possible.
-    return window.combatants || []; // set this global in your main file if needed
-  };
+  // --- Helpers ---
+  const CA = () => window.CombatAPI; // convenience
 
-  // --------- Helpers ----------
+  function syncFromCombatAPI() {
+    selected.clear();
+    if (CA()?.getSelectedIds) {
+      CA().getSelectedIds().forEach(id => selected.add(id));
+    }
+  }
+
+  function pushSelectionToCombatAPI() {
+    CA()?.setSelectedIds?.(selected);
+  }
+
+  function getAllCombatants() {
+    return CA()?.getCombatants?.() || [];
+  }
+
   function updateBulkBar() {
     const count = selected.size;
     selectionCounter.textContent = `${count} selected`;
-    if (count > 0 && !locked) {
-      bulkActionsBar.classList.add('visible');
-    } else {
-      bulkActionsBar.classList.remove('visible');
-    }
-    const all = getCombatants();
-    selectAllCheckbox.checked = count > 0 && count === all.length;
+    if (count > 0 && !locked) bulkActionsBar.classList.add('visible');
+    else bulkActionsBar.classList.remove('visible');
+
+    // checkbox state
+    const total = countableCombatants();
+    selectAllCheckbox.checked = total > 0 && count === total;
+    selectAllCheckbox.indeterminate = count > 0 && count < total;
+  }
+
+  function countableCombatants() {
+    const all = getAllCombatants();
+    let n = 0;
+    all.forEach(i => {
+      if (i.type === 'combatant') n++;
+      if (i.type === 'group') n += (i.members?.length || 0);
+    });
+    return n;
+  }
+
+  function markRows() {
+    // re-apply checked state after renders
+    [...combatantListBody.querySelectorAll('.tracker-table-row')].forEach(row => {
+      const id = row.dataset.id;
+      const cb = row.querySelector('.select-cell input[type="checkbox"]');
+      const checked = selected.has(id);
+      row.classList.toggle('selected', checked);
+      if (cb) {
+        cb.checked = checked;
+        cb.disabled = locked;
+      }
+    });
+  }
+
+  function refreshUI() {
+    updateBulkBar();
+    markRows();
   }
 
   function clearSelection() {
     selected.clear();
-    updateBulkBar();
-    render(); // from your main tracker
+    pushSelectionToCombatAPI();
+    refreshUI();
   }
 
   function toggleLock() {
     locked = !locked;
     lockBtn?.classList.toggle('locked', locked);
-    if (lockBtn) {
-      lockBtn.innerHTML = locked ? '🔓 Unlock Group Selection' : '🔒 Lock Group Selection';
-      lockBtn.setAttribute('aria-pressed', String(locked));
-    }
+    lockBtn.innerHTML = locked
+      ? '🔓 <span class="label">Unlock Groups</span>'
+      : '🔒 <span class="label">Lock Groups</span>';
+    lockBtn.setAttribute('aria-pressed', String(locked));
     if (locked) clearSelection();
-    // disable all checkboxes in rows
-    [...combatantListBody.querySelectorAll('.select-cell input[type="checkbox"]')]
-      .forEach(cb => cb.disabled = locked);
+    markRows();
   }
 
-  // --------- Selection wiring ----------
-  // Select All
+  // --- Selection wiring ---
   selectAllCheckbox?.addEventListener('change', () => {
     if (locked) return;
     selected.clear();
-    if (selectAllCheckbox.checked) {
-      getCombatants().forEach(c => selected.add(c.id));
-    }
-    updateBulkBar();
-    render();
+
+    // add every combatant id (top-level and inside groups)
+    const all = getAllCombatants();
+    all.forEach(i => {
+      if (i.type === 'combatant') selected.add(i.id);
+      if (i.type === 'group') (i.members || []).forEach(m => selected.add(m.id));
+    });
+
+    pushSelectionToCombatAPI();
+    // trigger re-render from API so rows rebuild, then re-mark:
+    CA()?.render?.();
+    refreshUI();
   });
 
-  // Per-row checkbox (event delegation)
   combatantListBody?.addEventListener('click', (e) => {
     if (locked) return;
-    const cb = e.target.closest('input[type="checkbox"]');
+    const cb = e.target.closest('.select-cell input[type="checkbox"]');
     if (!cb) return;
     const row = cb.closest('.tracker-table-row');
     if (!row) return;
     const id = row.dataset.id;
     if (!id) return;
 
-    if (cb.checked) selected.add(id);
-    else selected.delete(id);
-
-    updateBulkBar();
-    // Row highlight handled by render, so re-render for visual state
-    render();
+    if (cb.checked) selected.add(id); else selected.delete(id);
+    pushSelectionToCombatAPI();
+    refreshUI();
   });
 
-  // --------- Bulk actions ----------
+  // --- Bulk actions (no native prompts) ---
   bulkDamageHealBtn?.addEventListener('click', () => {
     if (locked || selected.size === 0) return;
-    showHpPopup([...selected]); // your global popup function
+    window.showHpPopup?.([...selected]); // your existing popup
   });
 
   bulkDeleteBtn?.addEventListener('click', () => {
     if (locked || selected.size === 0) return;
-    if (!confirm(`Delete ${selected.size} selected combatant(s)?`)) return;
-    deleteCombatants([...selected]); // your global delete function (should call render)
-    selected.clear();
-    updateBulkBar();
+    // If you want a custom modal here, wire it similarly; avoiding confirm().
+    window.deleteCombatants?.([...selected]); // you should implement this
+    clearSelection();
+    CA()?.render?.();
   });
 
-  bulkGroupBtn?.addEventListener('click', () => {
+  // --- Move to Group: MODAL UI now lives here ---
+  function openMoveModal() {
     if (locked || selected.size === 0) return;
-    const groupName = prompt('Enter group name to assign to selected combatants:');
-    if (!groupName) return;
-    // In a fuller app you’d also mutate each combatant’s group field here:
-    // const ids = [...selected];
-    // const all = getCombatants();
-    // all.forEach(c => { if (ids.includes(c.id)) c.group = groupName; });
-    HistoryLog?.log?.(`📁 Moved ${selected.size} combatant(s) to group '${groupName}'.`);
-    render();
-    updateBulkBar();
+
+    // Populate group list
+    groupSelect.innerHTML = '';
+    const groups = CA()?.allGroups?.() || [];
+    if (groups.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = '— No groups yet — (Confirm to create one)';
+      groupSelect.appendChild(opt);
+    } else {
+      groups.forEach(g => {
+        const opt = document.createElement('option');
+        opt.value = g.id;
+        opt.textContent = g.name;
+        groupSelect.appendChild(opt);
+      });
+    }
+    moveModal.classList.remove('hidden');
+  }
+
+  function closeMoveModal() {
+    moveModal.classList.add('hidden');
+  }
+
+  function confirmMove() {
+    const targetId = groupSelect.value;
+    if (targetId) {
+      CA()?.moveSelectedToGroup?.(targetId);
+    } else {
+      // auto-create a group if none existed / user left blank
+      const g = CA()?.addGroupByName?.(`Group ${ (CA()?.allGroups?.().length || 0) + 1 }`);
+      if (g) CA()?.moveSelectedToGroup?.(g.id);
+    }
+    closeMoveModal();
+    CA()?.render?.();
+  }
+
+  bulkGroupBtn?.addEventListener('click', openMoveModal);
+  cancelMoveBtn?.addEventListener('click', closeMoveModal);
+  confirmBtn?.addEventListener('click', confirmMove);
+
+  // --- Click a group row to move immediately (no prompts) ---
+  window.addEventListener('gs:clicked-group-row', (e) => {
+    if (locked || selected.size === 0) return;
+    const groupId = e.detail?.groupId;
+    if (!groupId) return;
+    CA()?.moveSelectedToGroup?.(groupId);
+    CA()?.render?.();
   });
 
-  // --------- Lock button in header ----------
-  lockBtn?.addEventListener('click', toggleLock);
-
-  // --------- Hooks into your render ---------
-  // After each render, re-apply selection checkboxes & disabled state.
-  // Call this from your main `render()` at the end if rows are rebuilt each time.
+  // --- Boot ---
+  // on load, mirror selection from CombatAPI if present (optional)
+  syncFromCombatAPI();
+  refreshUI();
+  // after every external render, call this to re-mark rows:
+  // (You can call window.GroupSelector.sync() from CombatTracker.render if desired.)
   window.GroupSelector = {
-    // Mark row as selected and sync checkbox state
-    syncRowCheckboxes() {
-      const ids = new Set(selected);
-      [...combatantListBody.querySelectorAll('.tracker-table-row')].forEach(row => {
-        const id = row.dataset.id;
-        const checked = ids.has(id);
-        row.classList.toggle('selected', checked);
-        const cb = row.querySelector('.select-cell input[type="checkbox"]');
-        if (cb) {
-          cb.checked = checked;
-          cb.disabled = locked;
-        }
-      });
-      updateBulkBar();
-    },
-    // Expose a way to clear selection when needed externally
+    sync() { syncFromCombatAPI(); refreshUI(); },
     clearSelection,
-    // Programmatically select a set of IDs (optional helper)
-    selectIds(ids = []) {
-      if (locked) return;
-      selected.clear();
-      ids.forEach(id => selected.add(id));
-      updateBulkBar();
-      render();
-    }
+    selectIds(ids = []) { if (!locked){ selected.clear(); ids.forEach(id => selected.add(id)); pushSelectionToCombatAPI(); CA()?.render?.(); refreshUI(); } }
   };
-
 })();
