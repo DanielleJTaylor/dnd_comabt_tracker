@@ -1,53 +1,41 @@
 /* css/combat-table.css */
 
-/*
-  This container wraps your table. It uses flexbox to position the table
-  and overflow:auto to enable scrolling when the table is too wide.
-*/
 .table-scroll-container {
   flex: 1 1 auto;
-  overflow: auto; /* Correctly enables horizontal and vertical scrolling */
+  overflow: auto;
   display: flex;
-  justify-content: center; /* Centers the table horizontally */
-  align-items: flex-start; /* Aligns table to the top */
+  justify-content: center;
+  align-items: flex-start;
   padding-top: 8px;
 }
 
-/* 
-  The table itself. Giving it a min-width allows it to be wider than 
-  the container, which is what makes the container's scrollbar appear.
-*/
 #tracker-table {
   box-sizing: border-box;
   width: 95%;
   min-width: 1150px;
-
-  /* UPDATED: Adjusted the fr units for Name and Status Tags */
   --cols:
-    minmax(40px, 0.4fr)  /* [SELECT] */
-    minmax(60px, 0.7fr)   /* [IMG] */
-    minmax(56px, 0.7fr)   /* [INIT] */
-    minmax(120px, 1.5fr)  /* [NAME] - REDUCED from 2fr */
-    minmax(60px, 0.7fr)   /* [AC] */
-    minmax(120px, 1.1fr)  /* [HP/MAX] */
-    minmax(70px, 0.8fr)   /* [TEMPHP] */
-    minmax(160px, 2fr)    /* [STATUS TAGS] - INCREASED from 1.6fr */
-    minmax(84px, 0.4fr)   /* [ROLE] */
-    minmax(150px, 1.2fr)  /* [BUTTONS/ACTIONS] */
-    minmax(60px, 0.5fr);  /* [DASHBOARD LINK] */
+    minmax(40px, 0.4fr)
+    minmax(60px, 0.7fr)
+    minmax(56px, 0.7fr)
+    minmax(120px, 1.5fr)
+    minmax(60px, 0.7fr)
+    minmax(120px, 1.1fr)
+    minmax(70px, 0.8fr)
+    minmax(160px, 2fr)
+    minmax(84px, 0.4fr)
+    minmax(150px, 1.2fr)
+    minmax(60px, 0.5fr);
 }
 
-/* This shared rule applies the grid structure to both the header and the rows */
 #tracker-table > .tracker-table-header,
 #combatant-list-body > .tracker-table-row {
   display: grid;
   grid-template-columns: var(--cols);
   gap: 8px;
   padding: 6px 8px;
-  align-items: center; /* Vertically align content in all cells */
+  align-items: center;
 }
 
-/* === HEADER (child of #tracker-table) === */
 #tracker-table > .tracker-table-header {
   background: #f6e4c1;
   border-bottom: 2px solid #d0bfa2;
@@ -55,9 +43,7 @@
   font: 700 0.8rem/1.2 sans-serif;
   text-transform: uppercase;
 }
-#tracker-table > .tracker-table-header > .cell { background: inherit; }
 
-/* === ROWS (inside #combatant-list-body) === */
 #combatant-list-body > .tracker-table-row {
   background: #fff;
   border-bottom: 1px solid #e0e0e0;
@@ -65,185 +51,136 @@
 }
 
 #combatant-list-body > .tracker-table-row:nth-child(even) { background: #fbf7eb; }
-#combatant-list-body > .tracker-table-row.current-turn {
-  background: #e8f5e9;
-  border-left: 4px solid #4CAF50;
-}
 #combatant-list-body > .tracker-table-row:hover { background:#f1f8ff; }
-#combatant-list-body > .tracker-table-row .cell { background: inherit; }
 
-
-/* css/combat-table.css */
-
-/* ... (previous CSS rules are unchanged) ... */
-
-
-/* === CELL STYLES === */
-.cell { 
-  display:flex; 
-  align-items:center; 
-  padding: 2px 4px; 
-}
-
-/* REMOVED: The .cell-center utility class is no longer needed. */
-/* .cell-center { justify-content: center; } */
-
-/* CONSOLIDATED ALIGNMENT RULES: This is the new single source of truth. */
-/* It ensures that header cells and row cells with the same class are always aligned. */
-.select-cell,
-.image-cell,
-.init-cell,
-.ac-cell,
-.hp-cell,
-.temp-hp-cell,
-.status-cell,
-.role-cell,
-.actions-cell,
-.dashboard-link-cell {
+/* === CELL ALIGNMENT & STYLES === */
+.cell { display:flex; align-items:center; }
+.select-cell, .image-cell, .init-cell, .ac-cell, .hp-cell, .temp-hp-cell,
+.status-cell, .role-cell, .actions-cell, .dashboard-link-cell {
   justify-content: center;
 }
-
-.name-cell { 
-  justify-content: flex-start; /* Only the name cell should be left-aligned */
-  font-weight:700; 
+.name-cell { justify-content: flex-start; font-weight:700; }
+.image-cell img { width:60px; height:60px; border-radius:50%; object-fit:cover; }
+.select-cell input { transform: scale(1.2); cursor: pointer; }
+.hp-cell { gap: 0.5rem; font-weight: bold; }
+.hp-heart { color: #e53935; font-size: 1.2em; }
+.actions-cell .btn-group { display: flex; gap: 4px; }
+.status-cell button, .actions-cell .btn-group button, .dashboard-link-cell button {
+  background-color: transparent; border: 1px solid #bdbdbd; border-radius: 4px;
+  cursor: pointer; padding: 4px 8px; font-size: 0.8rem;
 }
 
-
-.image-cell img { 
-  width:60px; 
-  height:60px; 
-  border-radius:50%; 
-  object-fit:cover; 
+/* === SELECTION & LOCKING === */
+#combatant-list-body > .tracker-table-row.selected {
+  background-color: #e3f2fd !important;
 }
-
-/* REMOVED: This old grouped rule is now handled by the consolidated rules above. */
-/*
-.actions-cell,
-.status-cell,
-.ac-cell,
-.hp-cell,
-.init-cell,
-.role-cell,
-.temp-hp-cell,
-.dashboard-link-cell { 
-  justify-content:center; 
-}
-*/
-
-/* ... (rest of the file is unchanged) ... */
-
-/* --- Special Content Inside Cells --- */
-.hp-cell {
-  gap: 0.5rem;
-  font-weight: bold;
-}
-
-.hp-heart {
-  color: #e53935; /* Red heart icon */
-  font-size: 1.2em;
-}
-
-.status-cell button,
-.actions-cell .btn-group button {
-  background-color: #e0e0e0;
-  border: 1px solid #bdbdbd;
-  border-radius: 4px;
-  cursor: pointer;
-  padding: 4px 8px;
-  font-size: 0.8rem;
-}
-
-/* FIX: Make dashboard button background transparent to match the row */
-.dashboard-link-cell button {
-  background-color: transparent;
-  border: 1px solid #bdbdbd;
-  border-radius: 4px;
-  cursor: pointer;
-  padding: 4px 8px;
-}
-
-.actions-cell .btn-group {
-  display: flex;
-  gap: 4px;
-}
-
-/* css/combat-table.css */
-
-/* ... (previous CSS rules are correct) ... */
-
-
-/*
-██╗██████╗ ██╗   ██╗██████╗ ███████╗██████╗ 
-██║╚════██╗██║   ██║██╔══██╗██╔════╝██╔══██╗
-██║ █████╔╝██║   ██║██████╔╝█████╗  ██████╔╝
-██║ ╚═══██╗██║   ██║██╔═══╝ ██╔══╝  ██╔══██╗
-██║██████╔╝╚██████╔╝██║     ███████╗██║  ██║
-╚═╝╚═════╝  ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═╝
-*/
-/* CORRECTED: Rules for combatants inside a group */
-/* This no longer redefines the --cols variable, ensuring it always matches the header. */
-
-/* === EXISTING .in-group RULES === */
-/* Your existing rules for .in-group are correct, but I'll list them here
-   for completeness. These indent the combatant and rearrange the columns. */
-
-/* 1. Hide the checkbox cell's content for grouped items */
-.tracker-table-row.in-group .select-cell {
+#tracker-table.selection-locked .select-cell {
   visibility: hidden;
 }
 
-/* 2. Hide the Initiative cell completely */
-.tracker-table-row.in-group .init-cell {
-  display: none;
-}
-
-/* 3. Make the Image cell span across the empty init column space */
-.tracker-table-row.in-group .image-cell {
-  grid-column: 2 / span 2; /* Starts at grid line 2, spans 2 columns */
-  justify-content: flex-start;
-  padding-left: 15px; /* Creates the indent effect */
-}
-
-
-
-/* ... (rest of the file is unchanged) ... */
-
-/* 3. Indent the Name cell */
-.tracker-table-row.in-group .name-cell {
-  padding-left: 20px; /* Adjust this value as needed for the indent */
-}
-
-
-/* ... rest of your CSS file remains the same ... */
-
-/* === BULK ACTIONS BAR === */
-.bulk-actions-bar {
-  display: none; /* hidden by default */
-  grid-template-columns: auto auto 1fr auto;
+/* === GROUP STYLES === */
+.group-row {
+  grid-column: 1 / -1;
+  display: flex;
   align-items: center;
-  gap: 0.75rem 1rem;
+  padding: 8px 16px;
+  background-color: #e6d3b0;
+  border-top: 2px solid #d0bfa2;
+  border-bottom: 2px solid #d0bfa2;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.group-row:hover { background-color: #d0bfa2; }
+.group-row .group-icon { margin-right: 12px; font-size: 1.2em; }
+
+#combatant-list-body > .tracker-table-row.in-group {
+  background-color: #f3e9d4 !important;
+  border-left: 4px solid #d0bfa2;
+}
+.tracker-table-row.in-group .init-cell { display: none; }
+.tracker-table-row.in-group .image-cell {
+  grid-column: 2 / span 2;
+  justify-content: flex-start;
+  padding-left: 15px;
+}
+
+/* === MODAL STYLES (FOR GROUPING) === */
+/* css/combat-table.css */
+
+/* ... (all previous CSS is correct) ... */
+
+
+/* === MODAL STYLES (FOR GROUPING) === */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex; justify-content: center; align-items: center;
+  z-index: 200; opacity: 0; visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+.modal-overlay:not(.hidden) { opacity: 1; visibility: visible; }
+.modal-content {
+  background: #fbf7eb; padding: 2rem; border-radius: 8px;
+  width: 90%; max-width: 450px; box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  border: 2px solid #d0bfa2;
+}
+.modal-content h3 { margin-top: 0; font-family: "Georgia", serif; }
+.modal-content .form-group { margin-bottom: 1rem; }
+.modal-content label { display: block; margin-bottom: 0.5rem; font-weight: bold; }
+.modal-content select { width: 100%; padding: 10px; border: 1px solid #d0bfa2; border-radius: 4px; font-size: 1rem; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem; }
+
+/* ADDED: This rule restores the button styling inside the modal */
+.modal-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+  font-size: clamp(0.72rem, 1vw + 0.2rem, 1rem);
+  padding: 0.35rem 0.6rem;
+  background-color: #7fb069;
+  color: #fff;
+  border: 1px solid #6ca05b;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.modal-actions .btn:hover {
+  background-color: #6ca05b;
+}
+
+/* css/combat-table.css */
+
+/* ... (all other CSS rules are correct) ... */
+
+
+
+/* === BULK ACTIONS BAR (RESTORED) === */
+.bulk-actions-bar {
+  display: none; /* Hidden by default */
+  grid-template-columns: auto 1fr auto; /* Counter | Spacer | Actions */
+  align-items: center;
+  gap: 1rem;
   width: 100%;
   box-sizing: border-box;
-  padding: 0.4rem 1rem;
+  padding: 0.5rem 1rem; /* Slimmer padding */
   background-color: #f6e4c1;
   border-top: 2px solid #d0bfa2;
   border-bottom: 2px solid #d0bfa2;
 }
 
 .bulk-actions-bar.visible {
-  display: grid;
+  display: grid; /* Show when you add .visible */
 }
 
-.bulk-actions-bar .select-all input {
-  transform: scale(1.2);
-  vertical-align: middle;
-  cursor: pointer;
+#selectionCounter { 
+  font-weight: 700; 
 }
-#selectionCounter { font-weight: 700; }
 
 .bulk-actions-actions {
   display: grid;
   grid-auto-flow: column;
+  justify-content: flex-start; /* Pushes buttons to the right */
   gap: 0.5rem;
   max-width: 100%;
   overflow-x: auto;
@@ -256,11 +193,16 @@
   border: 1px solid #6ca05b;
   border-radius: 4px;
   padding: 0.45rem 0.8rem;
-  font-size: clamp(0.7rem, 0.8vw + 0.3rem, 1rem);
+  font-size: clamp(0.4rem, 0.6vw + 0.3rem, 1rem);
   cursor: pointer;
+  transition: background-color 0.2s ease;
 }
-.bulk-actions-actions button:hover { background-color: #6ca05b; }
 
+.bulk-actions-actions button:hover { 
+  background-color: #6ca05b; 
+}
+
+/* Responsive styles for the bulk actions bar */
 @media (max-width: 800px) {
   .bulk-actions-bar {
     grid-template-columns: 1fr;
@@ -268,92 +210,11 @@
   }
   .bulk-actions-actions {
     grid-auto-flow: row;
-    grid-template-columns: repeat(3, minmax(140px, 1fr));
-    overflow-x: visible;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    justify-content: stretch;
   }
 }
 
-/* ADDED: Visual indicator for a selected row */
-#combatant-list-body > .tracker-table-row.selected {
-  background-color: #e3f2fd !important; /* Use !important to override hover/nth-child */
-}
 
-#combatant-list-body > .tracker-table-row:nth-child(even) { background: #fbf7eb; }
-
-/* ... rest of file is unchanged ... */
-
-.select-cell {
-  justify-content: center;
-}
-
-.select-cell input {
-  transform: scale(1.2); /* Makes checkbox slightly larger */
-  cursor: pointer;
-}
-
-/* ADDED: New rule block for the locked state */
-/* When the table is locked, hide the contents of the select-cell */
-#tracker-table.selection-locked .select-cell {
-  visibility: hidden; /* Hides content but preserves space, preventing layout shift */
-}
-
-
-/* === TRACKER LOG PANEL === */
-.tracker-log-panel {
-  position: fixed;
-  bottom: 0;
-  right: 0;
-  width: 350px;
-  height: 40vh;
-  background-color: rgba(20, 20, 20, 0.9);
-  color: #f0f0f0;
-  border-top: 2px solid #00bfa6;
-  border-left: 2px solid #00bfa6;
-  border-radius: 10px 0 0 0;
-  transform: translateY(100%); /* Start hidden */
-  transition: transform 0.3s ease-in-out;
-  z-index: 100;
-}
-
-.tracker-log-panel.visible {
-  transform: translateY(0); /* Slide into view */
-}
-
-.log-content {
-  padding: 1rem;
-  height: 100%;
-  overflow-y: auto;
-  box-sizing: border-box;
-  font-family: 'Courier New', Courier, monospace;
-}
-
-
-/* ... (previous CSS rules are unchanged) ... */
-
-
-/* === GROUP ROW STYLES (NEW) === */
-.group-row {
-  /* This makes the group row span the entire table width */
-  grid-column: 1 / -1; 
-  display: flex;
-  align-items: center;
-  padding: 8px 16px;
-  background-color: #e6d3b0; /* A distinct but complementary color */
-  border-bottom: 2px solid #d0bfa2;
-  border-top: 2px solid #d0bfa2;
-  margin-top: 4px;
-  font-weight: bold;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.group-row:hover {
-  background-color: #d0bfa2;
-}
-
-.group-row .group-icon {
-  margin-right: 12px;
-  font-size: 1.2em;
-}
-
-
+/* === MODAL STYLES (FOR GROUPING) === */
+/* ... (modal styles follow) ... */
