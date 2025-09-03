@@ -1,11 +1,14 @@
 :root{
   --grid-columns: 12;
   --grid-gap: 12px;
-  --row-size: 80px;           /* JS will update this to keep cells roughly square */
+  --row-size: 80px; /* JS updates */
   --parchment-bg:#f6e4c1;
   --parchment-dark:#e8d7b3;
   --parchment-border:#d0bfa2;
   --btn:#7fb069; --btn-hover:#6ca05b;
+
+  /* space reserved on the RIGHT for the ❌ icon */
+  --x-reserve: 32px;
 }
 
 *{box-sizing:border-box}
@@ -46,88 +49,152 @@ body{font-family:sans-serif;background:var(--parchment-bg);color:#333}
   flex:1 1 auto;min-height:0;                /* allows internal scroll if needed */
   display:grid;
   grid-template-columns:repeat(var(--grid-columns), 1fr);
-  grid-auto-rows:var(--row-size);            /* base row height (JS keeps it square-ish) */
+  grid-auto-rows: calc(var(--row-size) / 2); /* half-row tracks */ /* base row height (JS keeps it square-ish) */
   gap:var(--grid-gap);
   padding:var(--grid-gap);
 }
 
 /* Blocks */
-.block {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    background-color: #ffffff;   /* pure white writing area */
-    border: 1px solid var(--parchment-border);
-    border-radius: 5px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    overflow: hidden;
-    cursor: move; 
+/* Block shell */
+.block{
+  position:relative;
+  display:flex; flex-direction:column;
+  background:#fff;
+  border:1px solid var(--parchment-border);
+  border-radius:5px;
+  box-shadow:0 2px 5px rgba(0,0,0,.05);
+  overflow:hidden;               /* keep ❌ visible; content scrolls inside */
+  cursor:grab;
 }
 
-/* Editable area */
-.block-content {
-    flex-grow: 1;
-    padding: 1.6rem 10px 10px 10px; /* ⬅ top padding added for ❌ */
-    overflow: auto;
-    outline: none;
-    white-space: normal;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-    cursor: text; 
+/* Only reserve space on the RIGHT for the X.
+   No top/bottom padding so headings look vertically centered. */
+/* Content area: no top/bottom padding, reserve space at right for the X.
+   Kill default first/last margins so text starts flush. */
+.block-content{
+  padding: 10px calc(8px + var(--x-reserve)) 0 8px;  /* top 0, right reserved, bottom 0, left 8 */
+  line-height: 1.2;
+  min-height: 0;
+  overflow: auto;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  outline: none;
+  cursor: text;
 }
+
+/* Remove the automatic top/bottom margins that create the “white space” */
+.block-content > :first-child { margin-top: 0 !important; }
+.block-content > :last-child  { margin-bottom: 0 !important; }
+
+/* Optional: normalize common element margins inside blocks */
+.block-content h1,
+.block-content h2,
+.block-content h3,
+.block-content h4,
+.block-content h5,
+.block-content h6,
+.block-content p,
+.block-content ul,
+.block-content ol,
+.block-content blockquote,
+.block-content pre {
+  margin: 0.25rem 0;          /* small consistent spacing */
+}
+
+/* Media inside blocks behaves nicely */
+.block-content img, .block-content svg, .block-content canvas, .block-content video {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+
+/* keep the X nicely inset */
+.delete-btn{ inset: 6px 6px auto auto; }
+
+
 
 /* Subtle default cursor */
-.block { cursor: grab; }
-.block.dragging { cursor: grabbing; }
+/* reserve reliable space for the X; works even on tiny half-row blocks */
+:root { --block-top-pad: 28px; }
 
-/* Strong visual when dragging */
-.block.dragging {
-  box-shadow: 0 10px 24px rgba(0,0,0,.18);
-  border-color: #4CAF50; /* purple outline while dragging */
-  outline: 2px solid #4CAF50;
-  outline-offset: -2px;
+.block {
+  cursor: text;
 }
 
+.block.dragging{ cursor:grabbing; }
 
-
-.block.dragging::before { left: -2px; top: -2px; border-top-left-radius: 3px; }
-.block.dragging::after  { right: -2px; bottom: -2px; border-bottom-right-radius: 3px; }
-
-
-/* ❌ button */
-.delete-btn {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    background: none;
-    border: none;
-    font-size: 1.2rem;
-    color: #888;
-    cursor: pointer;
-    z-index: 2;
+/* Green ONLY while dragging */
+.block.dragging{
+  box-shadow:0 10px 24px rgba(0,0,0,.18);
+  border-color:#4CAF50;
+  outline:2px solid #4CAF50;
+  outline-offset:-2px;
 }
-.delete-btn:hover { color: #d9534f; }
 
-
-/* Resize handle (unchanged) */
-.resize-handle {
-    position: absolute;
-    bottom: -5px;
-    right: -5px;
-    width: 20px;
-    height: 20px;
-    cursor: nwse-resize;
-    opacity: 0.4;
-    border-bottom: 3px solid var(--parchment-border);
-    border-right: 3px solid var(--parchment-border);
+/* Subtle feedback while resizing (no green) */
+.block.resizing{
+  box-shadow:0 6px 16px rgba(0,0,0,.15);
+  outline:none;
 }
-.block:hover .resize-handle { opacity: 1; }
 
+/* No highlight while editing text */
+.block.editing{
+  outline:none;
+  box-shadow:0 2px 5px rgba(0,0,0,.05);
+  border-color:var(--parchment-border);
+  cursor: text;
+}
+
+/* Content: no top padding; reserve RIGHT side for ❌ and enable scroll */
+.block-content{
+  line-height:1.2;
+  min-height:0;
+  overflow:auto;                /* ✅ scrolling works */
+  white-space:normal;
+  overflow-wrap:break-word;
+  word-break:break-word;
+  outline:none;
+}
+
+/* ❌ stays pinned at the top-right of the BLOCK, not the content */
+.delete-btn{
+  position:absolute;
+  top:6px;
+  right:6px;
+  width:24px; height:24px;
+  display:grid; place-items:center;
+  background:none; border:none;
+  font-size:1.1rem; line-height:1;
+  color:#888; cursor:pointer; z-index:2;
+  /* keep it clickable above content’s scrolling layer */
+  pointer-events:auto;
+}
+.delete-btn:hover{ color:#d9534f; }
+
+/* Resize handle */
+.resize-handle{
+  position:absolute;
+  bottom:-5px; right:-5px;
+  width:20px; height:20px;
+  cursor:nwse-resize; opacity:.4;
+  border-bottom:3px solid var(--parchment-border);
+  border-right:3px solid var(--parchment-border);
+}
+.block:hover .resize-handle{ opacity:1; }
 
 /* Lock state */
-.is-locked .block-header{cursor:default}
-.is-locked .resize-handle,.is-locked .delete-btn,#sheet-container.is-locked #add-block-btn{display:none}
-.is-locked [contenteditable]{pointer-events:none}
+.is-locked .resize-handle,
+.is-locked .delete-btn,
+#sheet-container.is-locked #add-block-btn{ display:none; }
+/* Lock stops editing, but keeps scroll/hover working */
+.is-locked [contenteditable]{
+  pointer-events: auto;   /* allow wheel/trackpad scroll */
+  user-select: text;      /* you can still select text (optional) */
+  caret-color: transparent; /* no caret shown (optional) */
+}
+
 
 /* FAB */
 #add-block-btn{

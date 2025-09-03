@@ -25,10 +25,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const cellW = (contentW - gap * (cols - 1)) / cols;
 
     // Keep rows ≈ squares: set CSS --row-size to cellW (but cap a bit)
-    const rowSize = Math.max(56, Math.min(120, cellW));
-    blocksContainer.style.setProperty('--row-size', `${rowSize}px`);
+    const rowSize = Math.max(24, Math.min(96, cellW * 0.8));   // visual “full row”
+    const rowUnit = rowSize / 2;                                // actual grid track height
 
-    return { cols, gap, cellW, rowH: rowSize };
+    blocksContainer.style.setProperty('--row-size', `${rowSize}px`);
+    return { cols, gap, cellW, rowH: rowSize, rowUnit };
   }
 
   // ========== OCCUPANCY ==========
@@ -130,52 +131,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ========== BIND DRAG / RESIZE ==========
     function bindBlockEvents(el){
-        const content = el.querySelector('.block-content');
+    const content = el.querySelector('.block-content');
 
-        interact(el)
-            .draggable({
-            // drag from anywhere on the block
-            listeners: {
-                start: e => {
-                // visually mark
-                e.target.classList.add('dragging');
+    // mark editing state (no highlight while typing)
+    content?.addEventListener('focusin', () => el.classList.add('editing'));
+    content?.addEventListener('focusout', () => el.classList.remove('editing'));
 
-                // temporarily disable editing so a drag can start anywhere
-                if (content) {
-                    content.dataset.prevCe = content.getAttribute('contenteditable') || 'true';
-                    content.setAttribute('contenteditable', 'false');
-                }
-                },
-                move: dragMove,
-                end: e => {
-                e.target.classList.remove('dragging');
-
-                // restore editing state
-                if (content) {
-                    content.setAttribute('contenteditable', content.dataset.prevCe || 'true');
-                    delete content.dataset.prevCe;
-                }
-
-                dragEnd(e);
-                }
+    interact(el)
+        .draggable({
+        listeners: {
+            start: e => {
+            e.target.classList.add('dragging');
+            if (content) {
+                content.dataset.prevCe = content.getAttribute('contenteditable') || 'true';
+                content.setAttribute('contenteditable', 'false');
+                content.style.pointerEvents = 'none';   // prevent caret selection from fighting drag
+            }
             },
-            // only ignore true controls
-            ignoreFrom: '.resize-handle, .delete-btn',
-            modifiers: [
-                interact.modifiers.restrictRect({ restriction: blocksContainer, endOnly: true })
-            ]
-            })
-            .resizable({
-            edges: { bottom: '.resize-handle', right: '.resize-handle' },
-            listeners: { move: resizeMove, end: resizeEnd }
-            });
-
-        // delete button
-        el.querySelector('.delete-btn')?.addEventListener('click', () => {
-            if (isLocked) return;
-            el.remove();
+            move: dragMove,
+            end: e => {
+            e.target.classList.remove('dragging');
+            if (content) {
+                content.setAttribute('contenteditable', content.dataset.prevCe || 'true');
+                delete content.dataset.prevCe;
+                content.style.pointerEvents = '';
+            }
+            dragEnd(e);
+            }
+        },
+        ignoreFrom: '.resize-handle, .delete-btn',
+        modifiers: [ interact.modifiers.restrictRect({ restriction: blocksContainer, endOnly: true }) ]
+        })
+        .resizable({
+        edges: { bottom: '.resize-handle', right: '.resize-handle' },
+        listeners: {
+            start: e => e.target.classList.add('resizing'),
+            move: resizeMove,
+            end:  e => { e.target.classList.remove('resizing'); resizeEnd(e); }
+        }
         });
+
+    el.querySelector('.delete-btn')?.addEventListener('click', () => {
+        if (isLocked) return;
+        el.remove();
+    });
     }
+
 
 
   function dragMove(e){
@@ -197,7 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Convert pixel offset → grid shifts
     const colShift = Math.round(dx / (metrics.cellW + metrics.gap));
-    const rowShift = Math.round(dy / (metrics.rowH + metrics.gap));
+    const rowShift = Math.round(dy / (metrics.rowUnit + metrics.gap));
 
     const cur = readRect(el);
     let next = {
@@ -223,7 +224,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // proposed spans from visual rect
     let propColSpan = Math.max(1, Math.round((e.rect.width  + metrics.gap) / (metrics.cellW + metrics.gap)));
-    let propRowSpan = Math.max(1, Math.round((e.rect.height + metrics.gap) / (metrics.rowH + metrics.gap)));
+    let propRowSpan = Math.max(1, Math.round((e.rect.height + metrics.gap) / (metrics.rowUnit + metrics.gap)));
+
 
     // clamp within grid width
     propColSpan = Math.min(propColSpan, metrics.cols - cur.colStart + 1);
