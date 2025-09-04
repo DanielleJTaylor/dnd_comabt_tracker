@@ -6,8 +6,10 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding-top: 8px;
+  margin-top: 8px; /* won't scroll with content */
 }
+
+
 
 #tracker-table {
   box-sizing: border-box;
@@ -44,6 +46,20 @@
   text-transform: uppercase;
 }
 
+/* === Sticky table header === */
+.tracker-table-header {
+  position: sticky;
+  top: 0; /* stick to top of scroll area */
+  z-index: 5; /* sit above combatant rows */
+  background: #f6e4c1; /* same bg so no gap shows */
+  border-bottom: 2px solid #d0bfa2;
+  color: #5c5c5c;
+  font: 700 0.8rem/1.2 sans-serif;
+  text-transform: uppercase;
+}
+
+
+
 #combatant-list-body > .tracker-table-row {
   background: #fff;
   border-bottom: 1px solid #e0e0e0;
@@ -61,8 +77,53 @@
 .name-cell { justify-content: flex-start; font-weight:700; }
 .image-cell img { width:60px; height:60px; border-radius:50%; object-fit:cover; }
 .select-cell input { transform: scale(1.2); cursor: pointer; }
-.hp-cell { gap: 0.5rem; font-weight: bold; }
-.hp-heart { color: #e53935; font-size: 1.2em; }
+/* ===== INIT ===== */
+.init-cell span {
+  font-weight: 700;
+  color: #2a4d8f;      /* dark blue highlight */
+  background: #e3ecff; /* subtle highlight box */
+  padding: 7px 12px;
+  border-radius: 4px;
+}
+
+/* ===== AC ===== */
+.ac-shield {
+  font-size: 1.3em;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+
+/* ===== HP ===== */
+.hp-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: bold;
+}
+.hp-heart {
+  color: #e53935;
+  font-size: 1.3em;
+  line-height: 1;
+  vertical-align: middle;
+  display: inline-block;
+}
+
+/* ===== TEMP HP ===== */
+.temp-hp-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: bold;
+  color: #4a7c59; /* greenish tint for temp hp */
+}
+.temp-icon {
+  font-size: 1.2em;
+  color: #4caf50; /* green sparkly look */
+  vertical-align: middle;
+  display: inline-block;
+}
+
+
 .actions-cell .btn-group { display: flex; gap: 4px; }
 .status-cell button, .actions-cell .btn-group button, .dashboard-link-cell button {
   background-color: transparent; border: 1px solid #bdbdbd; border-radius: 4px;
@@ -81,6 +142,20 @@
   background: #e8f5e9 !important; /* Green turn highlight */
   border-left: 4px solid #4CAF50;
 }
+
+
+/* === Combatant & Group Row Readability === */
+#combatant-list-body > .tracker-table-row,
+.group-row {
+  font-size: 1.1rem;         /* was ~0.8–0.9, now a touch bigger */
+}
+
+#combatant-list-body > .tracker-table-row .cell,
+.group-row .cell {
+  font-size: inherit;      /* all cells use the bumped size */
+}
+
+
 
 
 /* === GROUP STYLES (MODIFIED FOR NEW LOOK) === */
@@ -220,47 +295,48 @@
 
 
 /* === BULK ACTIONS BAR (RESTORED) === */
+/* Bulk actions bar — keep it compact and single-line */
 .bulk-actions-bar {
-  display: none; /* Hidden by default */
-  grid-template-columns: auto 1fr auto; /* Counter | Spacer | Actions */
+  display: none;
+  position: sticky;         /* optional: sticks under the controls row */
+  top: 0;                   /* align with your sticky header if desired */
+  z-index: 9;
+
   align-items: center;
-  gap: 1rem;
-  width: 100%;
-  box-sizing: border-box;
-  padding: 0.5rem 1rem; /* Slimmer padding */
-  background-color: #f6e4c1;
-  border-top: 2px solid #d0bfa2;
-  border-bottom: 2px solid #d0bfa2;
+  gap: .75rem;
+
+  min-height: 44px;         /* 👈 guarantees a sane height */
+  padding: 6px 10px;
+  line-height: 1.2;         /* 👈 prevents tall lines */
+  white-space: nowrap;      /* 👈 keeps label from wrapping */
 }
 
-.bulk-actions-bar.visible {
-  display: grid; /* Show when you add .visible */
+.bulk-actions-bar.visible { display: grid; }
+
+/* Reset margins so nothing “expands” the bar */
+.bulk-actions-bar * {
+  margin: 0;
 }
+
 
 #selectionCounter { 
   font-weight: 700; 
 }
 
 .bulk-actions-actions {
-  display: grid;
-  grid-auto-flow: column;
-  justify-content: flex-start; /* Pushes buttons to the right */
-  gap: 0.5rem;
+  display: flex;            /* simpler, predictable */
+  gap: .5rem;
+  align-items: center;
+  flex-wrap: nowrap;        /* 👈 don't wrap onto a new line */
+  overflow-x: auto;         /* 👈 scroll horizontally if crowded */
   max-width: 100%;
-  overflow-x: auto;
 }
 
 .bulk-actions-actions button {
+  flex: 0 0 auto;           /* 👈 keep natural size; no stretch */
   white-space: nowrap;
-  background-color: #7fb069;
-  color: #fff;
-  border: 1px solid #6ca05b;
-  border-radius: 4px;
-  padding: 0.45rem 0.8rem;
-  font-size: clamp(0.4rem, 0.6vw + 0.3rem, 1rem);
-  cursor: pointer;
-  transition: background-color 0.2s ease;
 }
+
 
 .bulk-actions-actions button:hover { 
   background-color: #6ca05b; 
@@ -293,3 +369,34 @@
   color: #333;
 }
 
+
+
+/* Inline editing affordances */
+.editable-text,
+.editable-int {
+  cursor: text;
+  border-bottom: 1px dashed transparent;
+}
+.editable-text:hover,
+.editable-int:hover {
+  border-bottom-color: rgba(0,0,0,.2);
+}
+
+/* The input that replaces the span while editing */
+.inline-editor {
+  width: 100%;
+  max-width: 140px;          /* keeps cells from ballooning */
+  box-sizing: border-box;
+  font: inherit;
+  padding: 2px 4px;
+  border: 1px solid #bdbdbd;
+  border-radius: 3px;
+  background: #fffef7;
+  outline: none;
+}
+.inline-editor:focus {
+  border-color: #7fb069;
+  box-shadow: 0 0 0 2px rgba(127,176,105,.25);
+}
+
+.name-cell .inline-editor { max-width: 220px; }
