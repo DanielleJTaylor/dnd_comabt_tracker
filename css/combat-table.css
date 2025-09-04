@@ -164,23 +164,71 @@
 /* Pick ONE dark folder tone and reuse it everywhere */
 /* === Group palette (tweak to taste) === */
 /* ===== Group palette ===== */
+/* css/combat-table.css */
+
+/* ... (previous CSS) ... */
+
+/* === GROUP STYLES (MODIFIED FOR NEW LOOK) === */
+/* === Unified “group” skin for header + children === */
+
+/* Pick ONE dark folder tone and reuse it everywhere */
+/* === Group palette (tweak to taste) === */
+/* ===== Group palette ===== */
+/* css/combat-table.css */
+
+/* ... (previous styles are correct) ... */
+
+/* ===== Group palette ===== */
 :root{
-  --group-header-bg: #a8ba95;   /* darker green (folder line) */
-  --group-header-br: #8ba277;
-  --group-member-bg: #cfdfc3;   /* lighter green (member rows) */
-  --group-member-bg-hover: #dbe8d2;
+  /* Folder icon palette */
+  --group-folder-tab:    #d8c38b;
+  --group-folder-body:   #e6d3a5;
+  --group-folder-stroke: #c3b07e;
+  --group-folder-gloss:  rgba(255,255,255,.35);
+
+  /* Group row palette (header + members) */
+  --group-header-bg:       #c6f0c1;    /* header background */
+  --group-header-br:       #a3c19f;  /* header top/bottom border */
+  --group-member-bg:       #ddf3da;  /* member rows */
+  --group-member-bg-hover: #eaf0e6;  /* member hover */
 }
+
+
+.group-folder-img {
+  width: 42px;   /* make it bigger or smaller */
+  height: 42px;  /* taller */
+  object-fit: contain; /* scale without stretching */
+}
+
+
+/* color parts */
+.group-folder .gf-tab   { fill: var(--group-folder-tab);   stroke: var(--group-folder-stroke); stroke-width: 1; }
+.group-folder .gf-body  { fill: var(--group-folder-body);  stroke: var(--group-folder-stroke); stroke-width: 1; }
+.group-folder .gf-gloss { fill: var(--group-folder-gloss); }
+
+/* ... (the rest of the CSS file is correct) ... */
+
+/* subtle hover with the existing group-row hover */
+.group-row:hover .group-folder .gf-body { filter: brightness(0.98); }
+
+/* keep icon centered in the IMG column like before */
+.group-row .image-cell { justify-content: center; }
+
+
+/* ... (rest of the CSS) ... */
+
+/* Group header uses the SAME grid as rows so columns line up */
+/* ... (other styles) ... */
 
 /* Group header uses the SAME grid as rows so columns line up */
 .group-row {
   display: grid;
   grid-template-columns: var(--cols); /* <-- same as table rows */
-  align-items: center;
+  /* REMOVED: align-items: center; */ /* Let cells stretch vertically */
   gap: 8px;
 
   /* Make the bar a bit taller */
-  padding: 6px 8px;              /* increased height */
-  min-height: 33px;
+  padding: 1px 8px;
 
   background: var(--group-header-bg);
   border-top: 2px solid var(--group-header-br);
@@ -189,9 +237,15 @@
   cursor: pointer;
   transition: filter .15s ease;
 }
-.group-row:hover { filter: brightness(0.97); }
 
 /* Treat the inner cells just like normal cells */
+/* This rule now correctly centers the content within the full-height cells */
+.group-row .cell { 
+  display:flex; 
+  align-items:center; 
+}
+
+/* ... (the rest of the CSS file is correct) ... */
 .group-row .cell { display:flex; align-items:center; }
 .group-row .select-cell,
 .group-row .image-cell,
@@ -205,13 +259,6 @@
 .group-row .dashboard-link-cell { justify-content: center; }
 .group-row .name-cell { justify-content: flex-start; }
 
-/* Folder "icon" that sits in the [IMG] column */
-.group-folder {
-  width: 28px; height: 20px; border-radius: 3px;
-  background: #e6d3a5;                 /* folder face */
-  border: 1px solid #c9b78a;
-  box-shadow: inset 0 0 0 2px rgba(255,255,255,.2);
-}
 
 /* Group members keep the lighter green */
 #combatant-list-body > .tracker-table-row.in-group {

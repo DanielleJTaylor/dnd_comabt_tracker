@@ -79,6 +79,11 @@
   }
 
   // ======= RENDER =======
+// scripts/combat_tracker.js
+
+// ... (previous JavaScript) ...
+
+  // ======= RENDER =======
   function render() {
     combatantListBody.innerHTML = '';
 
@@ -89,7 +94,9 @@
       row.dataset.type = 'group';
       row.innerHTML = `
         <div class="cell select-cell"></div>
-        <div class="cell image-cell"><span class="group-folder" aria-hidden="true"></span></div>
+        <div class="cell image-cell">
+          <img src="images/folder.png" alt="Group Folder" class="group-folder-img">
+        </div>
         <div class="cell init-cell">
           <span class="editable-int" data-type="group" data-id="${g.id}" data-field="init">${groupDisplayInit(g)}</span>
         </div>
@@ -106,6 +113,10 @@
       `;
       combatantListBody.appendChild(row);
     };
+
+
+
+// ... (rest of the JavaScript) ...
 
   const renderCombatantRow = (c, isInGroup = false) => {
     const isSelected = selectedCombatantIds.has(c.id);
