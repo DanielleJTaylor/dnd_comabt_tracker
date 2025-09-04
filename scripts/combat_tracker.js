@@ -278,11 +278,14 @@
   }
 
   // ======= PUBLIC API (used by group-selector.js) =======
+// ======= PUBLIC API (used by group-selector.js) =======
   window.CombatAPI = {
     // data
     getAllCombatants: () => combatants,
-    allGroups,
+    allGroups,                     // keep existing
+    getAllGroups: () => allGroups(),  // ← add this line
     addGroupByName,
+
 
     // selection
     getSelectedIds: () => new Set(selectedCombatantIds),
@@ -341,16 +344,6 @@
 
     updateSelectionMarks();
     dispatchRenderEvent();
-  });
-
-  // Instant move: click a group header to move selected there (no prompts)
-  combatantListBody?.addEventListener('click', (e) => {
-    if (isLocked) return;
-    const row = e.target.closest('.group-row');
-    if (!row) return;
-    if (selectedCombatantIds.size === 0) return;
-    const moved = moveSelectedToGroup(row.dataset.id);
-    if (moved) render(); // ensure fresh DOM in case of partial reflow
   });
 
   // ======= INIT =======
