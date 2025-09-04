@@ -201,11 +201,6 @@
 }
 
 
-/* color parts */
-.group-folder .gf-tab   { fill: var(--group-folder-tab);   stroke: var(--group-folder-stroke); stroke-width: 1; }
-.group-folder .gf-body  { fill: var(--group-folder-body);  stroke: var(--group-folder-stroke); stroke-width: 1; }
-.group-folder .gf-gloss { fill: var(--group-folder-gloss); }
-
 /* ... (the rest of the CSS file is correct) ... */
 
 /* subtle hover with the existing group-row hover */

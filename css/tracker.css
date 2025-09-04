@@ -47,21 +47,26 @@ body {
 
 /* Ensure the tracker column is a proper grid and doesn't overflow */
 /* Ensure the tracker column is a proper grid and handles shrinking */
+/* css/tracker.css */
+
+/* ... other styles ... */
+
+/* Ensure the tracker column is a proper grid and handles shrinking */
 #left-tracker {
   flex-grow: 1;
   width: 0;
   display: grid;
-    /* UPDATED: Define FOUR rows to match the four elements inside it.
-     This ensures the bulk actions bar gets a standard 'auto' height. */
-  grid-template-rows: auto auto auto 1fr; 
+  /*
+    UPDATED: Define a row for each header/control/banner element,
+    letting the final table container take the remaining space (1fr).
+    This prevents the hint banner from expanding.
+  */
+  grid-template-rows: auto auto auto auto auto 1fr;
 
-  /* REMOVED: This was the property causing the content to be cut off. */
-  /* overflow: hidden; */ 
-
-  /* ADDED: This is a crucial fix that allows a flex item to shrink
-     below its default minimum content size. */
   min-width: 0;
 }
+
+/* ... rest of the file is correct ... */
 
 /* Right panel visuals */
 #right-dashboard {
