@@ -1,34 +1,36 @@
 /* css/combat-table.css */
 
+/* The scroll wrapper MUST own the overflow and be allowed to shrink */
 .table-scroll-container {
   flex: 1 1 auto;
-  overflow: auto;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  margin-top: 8px; /* won't scroll with content */
+  min-width: 0;            /* critical: allow shrinking in a grid/flex parent */
+  height: 100%;
+  overflow-x: auto;         /* horizontal scroll when narrow */
+  overflow-y: auto;
+  display: block;           /* avoid centering quirks from flex */
+  margin-top: 8px;
 }
 
-
-
+/* The grid/table should not shrink below a sane width */
 #tracker-table {
   box-sizing: border-box;
-  width: 95%;
-  min-width: 1150px;
+  width: auto;              /* size to content; wrapper will scroll */
+  min-width: 1150px;        /* adjust to taste; ensures scroll kicks in */
   --cols:
-    minmax(40px, 0.4fr)
-    minmax(60px, 0.7fr)
-    minmax(56px, 0.7fr)
-    minmax(120px, 1.5fr)
-    minmax(60px, 0.7fr)
-    minmax(120px, 1.1fr)
-    minmax(70px, 0.8fr)
-    minmax(160px, 2fr)
-    minmax(84px, 0.4fr)
-    minmax(150px, 1.2fr)
-    minmax(60px, 0.5fr);
+    minmax(40px, 0.4fr)     /* select */
+    minmax(60px, 0.7fr)     /* image */
+    minmax(56px, 0.7fr)     /* init */
+    minmax(120px, 1.5fr)    /* name */
+    minmax(60px, 0.7fr)     /* AC */
+    minmax(120px, 1.1fr)    /* HP/MAX */
+    minmax(70px, 0.8fr)     /* Temp HP */
+    minmax(160px, 2fr)      /* Status */
+    minmax(84px, 0.4fr)     /* Role */
+    minmax(150px, 1.2fr)    /* Actions */
+    minmax(60px, 0.5fr);    /* Dashboard link */
 }
 
+/* Rows & header share the same grid */
 #tracker-table > .tracker-table-header,
 #combatant-list-body > .tracker-table-row {
   display: grid;
@@ -38,7 +40,11 @@
   align-items: center;
 }
 
-#tracker-table > .tracker-table-header {
+/* Sticky header */
+.tracker-table-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   background: #f6e4c1;
   border-bottom: 2px solid #d0bfa2;
   color: #5c5c5c;
@@ -46,399 +52,135 @@
   text-transform: uppercase;
 }
 
-/* === Sticky table header === */
-.tracker-table-header {
-  position: sticky;
-  top: 0; /* stick to top of scroll area */
-  z-index: 5; /* sit above combatant rows */
-  background: #f6e4c1; /* same bg so no gap shows */
-  border-bottom: 2px solid #d0bfa2;
-  color: #5c5c5c;
-  font: 700 0.8rem/1.2 sans-serif;
-  text-transform: uppercase;
-}
-
-
-
 #combatant-list-body > .tracker-table-row {
   background: #fff;
   border-bottom: 1px solid #e0e0e0;
   transition: background-color .2s ease;
 }
-
 #combatant-list-body > .tracker-table-row:hover { background:#f1f8ff; }
 
-/* === CELL ALIGNMENT & STYLES === */
-.cell { display:flex; align-items:center; }
+/* Cell alignment */
+.cell{ display:flex; align-items:center; }
 .select-cell, .image-cell, .init-cell, .ac-cell, .hp-cell, .temp-hp-cell,
-.status-cell, .role-cell, .actions-cell, .dashboard-link-cell {
-  justify-content: center;
-}
-.name-cell { justify-content: flex-start; font-weight:700; }
-.image-cell img { width:60px; height:60px; border-radius:50%; object-fit:cover; }
-.select-cell input { transform: scale(1.2); cursor: pointer; }
-/* ===== INIT ===== */
-.init-cell span {
-  font-weight: 700;
-  color: #2a4d8f;      /* dark blue highlight */
-  background: #e3ecff; /* subtle highlight box */
-  padding: 7px 12px;
-  border-radius: 4px;
+.status-cell, .role-cell, .actions-cell, .dashboard-link-cell { justify-content:center; }
+.name-cell{ justify-content:flex-start; font-weight:700; }
+.image-cell img{ width:60px; height:60px; border-radius:50%; object-fit:cover; }
+.select-cell input{ transform:scale(1.2); cursor:pointer; }
+
+/* Init/AC/HP/Temp styling */
+.init-cell span{ font-weight:700; color:#2a4d8f; background:#e3ecff; padding:7px 12px; border-radius:4px; }
+.ac-shield{ font-size:1.3em; margin-right:4px; vertical-align:middle; }
+.hp-cell{ display:flex; align-items:center; gap:.4rem; font-weight:bold; }
+.hp-heart{ color:#e53935; font-size:1.3em; line-height:1; vertical-align:middle; display:inline-block; }
+.temp-hp-cell{ display:flex; align-items:center; gap:.3rem; font-weight:bold; color:#4a7c59; }
+.temp-icon{ font-size:1.2em; color:#4caf50; vertical-align:middle; display:inline-block; }
+
+/* Buttons in rows */
+.actions-cell .btn-group{ display:flex; gap:4px; }
+.status-cell button, .actions-cell .btn-group button, .dashboard-link-cell button{
+  background:transparent; border:1px solid #bdbdbd; border-radius:4px;
+  cursor:pointer; padding:4px 8px; font-size:.8rem;
 }
 
-/* ===== AC ===== */
-.ac-shield {
-  font-size: 1.3em;
-  margin-right: 4px;
-  vertical-align: middle;
+/* Selection states */
+#combatant-list-body > .tracker-table-row.selected{ background:#e3f2fd !important; }
+#tracker-table.selection-locked .select-cell{ visibility:hidden; }
+#combatant-list-body > .tracker-table-row.current-turn{
+  background:#e8f5e9 !important; border-left:4px solid #4CAF50;
 }
 
-/* ===== HP ===== */
-.hp-cell {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-weight: bold;
-}
-.hp-heart {
-  color: #e53935;
-  font-size: 1.3em;
-  line-height: 1;
-  vertical-align: middle;
-  display: inline-block;
-}
-
-/* ===== TEMP HP ===== */
-.temp-hp-cell {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-weight: bold;
-  color: #4a7c59; /* greenish tint for temp hp */
-}
-.temp-icon {
-  font-size: 1.2em;
-  color: #4caf50; /* green sparkly look */
-  vertical-align: middle;
-  display: inline-block;
-}
-
-
-.actions-cell .btn-group { display: flex; gap: 4px; }
-.status-cell button, .actions-cell .btn-group button, .dashboard-link-cell button {
-  background-color: transparent; border: 1px solid #bdbdbd; border-radius: 4px;
-  cursor: pointer; padding: 4px 8px; font-size: 0.8rem;
-}
-
-/* === SELECTION & SPECIAL STATES === */
-#combatant-list-body > .tracker-table-row.selected {
-  background-color: #e3f2fd !important; /* Blue selection highlight */
-}
-#tracker-table.selection-locked .select-cell {
-  visibility: hidden;
-}
-/* UPDATED: Added !important to ensure current turn always shows */
-#combatant-list-body > .tracker-table-row.current-turn {
-  background: #e8f5e9 !important; /* Green turn highlight */
-  border-left: 4px solid #4CAF50;
-}
-
-
-/* === Combatant & Group Row Readability === */
+/* Readability sizing */
 #combatant-list-body > .tracker-table-row,
-.group-row {
-  font-size: 1.1rem;         /* was ~0.8–0.9, now a touch bigger */
-}
-
+.group-row{ font-size:1.1rem; }
 #combatant-list-body > .tracker-table-row .cell,
-.group-row .cell {
-  font-size: inherit;      /* all cells use the bumped size */
-}
-
-
-
-
-/* === GROUP STYLES (MODIFIED FOR NEW LOOK) === */
-/* === Unified “group” skin for header + children === */
-
-/* Pick ONE dark folder tone and reuse it everywhere */
-/* === Group palette (tweak to taste) === */
-/* ===== Group palette ===== */
-/* css/combat-table.css */
-
-/* ... (previous CSS) ... */
-
-/* === GROUP STYLES (MODIFIED FOR NEW LOOK) === */
-/* === Unified “group” skin for header + children === */
-
-/* Pick ONE dark folder tone and reuse it everywhere */
-/* === Group palette (tweak to taste) === */
-/* ===== Group palette ===== */
-/* css/combat-table.css */
-
-/* ... (previous styles are correct) ... */
+.group-row .cell{ font-size:inherit; }
 
 /* ===== Group palette ===== */
 :root{
-  /* Folder icon palette */
-  --group-folder-tab:    #d8c38b;
-  --group-folder-body:   #e6d3a5;
-  --group-folder-stroke: #c3b07e;
-  --group-folder-gloss:  rgba(255,255,255,.35);
-
-  /* Group row palette (header + members) */
-  --group-header-bg:       #c6f0c1;    /* header background */
-  --group-header-br:       #a3c19f;  /* header top/bottom border */
-  --group-member-bg:       #ddf3da;  /* member rows */
-  --group-member-bg-hover: #eaf0e6;  /* member hover */
+  --group-folder-tab:#d8c38b;
+  --group-folder-body:#e6d3a5;
+  --group-folder-stroke:#c3b07e;
+  --group-folder-gloss:rgba(255,255,255,.35);
+  --group-header-bg:#c6f0c1;
+  --group-header-br:#a3c19f;
+  --group-member-bg:#ddf3da;
+  --group-member-bg-hover:#eaf0e6;
 }
+.group-folder-img{ width:42px; height:42px; object-fit:contain; }
 
-
-.group-folder-img {
-  width: 42px;   /* make it bigger or smaller */
-  height: 42px;  /* taller */
-  object-fit: contain; /* scale without stretching */
-}
-
-
-/* ... (the rest of the CSS file is correct) ... */
-
-/* subtle hover with the existing group-row hover */
-.group-row:hover .group-folder .gf-body { filter: brightness(0.98); }
-
-/* keep icon centered in the IMG column like before */
-.group-row .image-cell { justify-content: center; }
-
-
-/* ... (rest of the CSS) ... */
-
-/* Group header uses the SAME grid as rows so columns line up */
-/* ... (other styles) ... */
-
-/* Group header uses the SAME grid as rows so columns line up */
-.group-row {
-  display: grid;
-  grid-template-columns: var(--cols); /* <-- same as table rows */
-  /* REMOVED: align-items: center; */ /* Let cells stretch vertically */
-  gap: 8px;
-
-  /* Make the bar a bit taller */
-  padding: 1px 8px;
-
-  background: var(--group-header-bg);
-  border-top: 2px solid var(--group-header-br);
-  border-bottom: 2px solid var(--group-header-br);
-  font-weight: 700;
-  cursor: pointer;
+/* Group header row uses SAME grid */
+.group-row{
+  display:grid;
+  grid-template-columns: var(--cols);
+  gap:8px;
+  padding:1px 8px;
+  background:var(--group-header-bg);
+  border-top:2px solid var(--group-header-br);
+  border-bottom:2px solid var(--group-header-br);
+  font-weight:700;
+  cursor:pointer;
   transition: filter .15s ease;
 }
+.group-row .cell{ display:flex; align-items:center; }
+.group-row .select-cell,.group-row .image-cell,.group-row .init-cell,.group-row .ac-cell,
+.group-row .hp-cell,.group-row .temp-hp-cell,.group-row .status-cell,.group-row .role-cell,
+.group-row .actions-cell,.group-row .dashboard-link-cell{ justify-content:center; }
+.group-row .name-cell{ justify-content:flex-start; }
 
-/* Treat the inner cells just like normal cells */
-/* This rule now correctly centers the content within the full-height cells */
-.group-row .cell { 
-  display:flex; 
-  align-items:center; 
+/* Group members share lighter background */
+#combatant-list-body > .tracker-table-row.in-group{ background:var(--group-member-bg) !important; }
+#combatant-list-body > .tracker-table-row.in-group:hover{ background:var(--group-member-bg-hover) !important; }
+
+/* Indentation for members */
+.tracker-table-row.in-group .select-cell{ visibility:hidden; }
+.tracker-table-row.in-group .init-cell{ display:none; }
+.tracker-table-row.in-group .image-cell{
+  grid-column: 2 / span 2;
+  justify-content:flex-start;
+  padding-left:90px;
+}
+.tracker-table-row.in-group .name-cell{ padding-left:10px; }
+
+/* Hint banner */
+.hint-banner{
+  display:none; padding:8px 12px; background:#fff8d0; border-top:1px solid #e2d48a; border-bottom:1px solid #e2d48a;
+  font-weight:600; color:#6b6000;
+}
+.hint-banner:not(.hidden){ display:block; }
+
+/* Mini confirm */
+.confirm-mini{ display:none; align-items:center; gap:.75rem; padding:.5rem .75rem;
+  background:#fff8d0; border-top:1px solid #e2d48a; border-bottom:1px solid #e2d48a; font-weight:600; color:#534a00; }
+.confirm-mini:not(.hidden){ display:flex; }
+.confirm-mini .btn{ padding:.3rem .6rem; font-size:.9rem; }
+.confirm-mini .btn.btn-secondary{ background:#e0e0e0; color:#333; border-color:#c7c7c7; }
+
+/* Bulk actions bar */
+.bulk-actions-bar{
+  display:none; position:sticky; top:0; z-index:9; align-items:center; gap:.75rem;
+  min-height:44px; padding:6px 10px; line-height:1.2; white-space:nowrap;
+}
+.bulk-actions-bar.visible{ display:grid; }
+.bulk-actions-bar *{ margin:0; }
+#selectionCounter{ font-weight:700; }
+.bulk-actions-actions{ display:flex; gap:.5rem; align-items:center; flex-wrap:nowrap; overflow-x:auto; max-width:100%; }
+.bulk-actions-actions button{ flex:0 0 auto; white-space:nowrap; }
+.bulk-actions-actions button:hover{ background:#6ca05b; }
+@media (max-width:800px){
+  .bulk-actions-bar{ grid-template-columns:1fr; row-gap:.5rem; }
+  .bulk-actions-actions{ grid-auto-flow:row; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); justify-content:stretch; }
 }
 
-/* ... (the rest of the CSS file is correct) ... */
-.group-row .cell { display:flex; align-items:center; }
-.group-row .select-cell,
-.group-row .image-cell,
-.group-row .init-cell,
-.group-row .ac-cell,
-.group-row .hp-cell,
-.group-row .temp-hp-cell,
-.group-row .status-cell,
-.group-row .role-cell,
-.group-row .actions-cell,
-.group-row .dashboard-link-cell { justify-content: center; }
-.group-row .name-cell { justify-content: flex-start; }
+/* INIT sorting buttons */
+.init-cell button{ background:none; border:none; font-size:.8rem; cursor:pointer; padding:0 2px; line-height:1; }
+.init-cell button:hover{ color:#333; }
 
-
-/* Group members keep the lighter green */
-#combatant-list-body > .tracker-table-row.in-group {
-  background: var(--group-member-bg) !important;
+/* Inline editor */
+.editable-text, .editable-int{ cursor:text; border-bottom:1px dashed transparent; }
+.editable-text:hover, .editable-int:hover{ border-bottom-color: rgba(0,0,0,.2); }
+.inline-editor{
+  width:100%; max-width:140px; box-sizing:border-box; font:inherit; padding:2px 4px;
+  border:1px solid #bdbdbd; border-radius:3px; background:#fffef7; outline:none;
 }
-#combatant-list-body > .tracker-table-row.in-group:hover {
-  background: var(--group-member-bg-hover) !important;
-}
-
-/* Keep member indentation exactly like your screenshot */
-.tracker-table-row.in-group .select-cell { visibility: hidden; }
-.tracker-table-row.in-group .init-cell { display: none; }
-.tracker-table-row.in-group .image-cell {
-  grid-column: 2 / span 2;  /* IMG spans IMG+INIT */
-  justify-content: flex-start;
-  padding-left: 90px;
-}
-.tracker-table-row.in-group .name-cell { padding-left: 10px; }
-
-
-.hint-banner {
-  display: none;
-  padding: 8px 12px;
-  background: #fff8d0;            /* soft yellow */
-  border-top: 1px solid #e2d48a;
-  border-bottom: 1px solid #e2d48a;
-  font-weight: 600;
-  color: #6b6000;
-}
-.hint-banner:not(.hidden) {
-  display: block;
-}
-
-
-#selectionCounter.flash { animation: flash 0.6s ease; }
-@keyframes flash {
-  0%,100% { background: transparent; }
-  30%     { background: #fff8d0; }
-}
-
-
-
-/* === MODAL & BULK ACTION STYLES (UNCHANGED) === */
-/* ... (the rest of your CSS for the modal and bulk actions bar is correct) ... */
-
-/* === MODAL STYLES (FOR GROUPING) === */
-/* css/combat-table.css */
-
-/* ... (all previous CSS is correct) ... */
-
-
-/* === CONFIRM FOR GROUPING) === */
-.confirm-mini {
-  display: none;
-  align-items: center;
-  gap: .75rem;
-  padding: .5rem .75rem;
-  background: #fff8d0;                 /* soft yellow */
-  border-top: 1px solid #e2d48a;
-  border-bottom: 1px solid #e2d48a;
-  font-weight: 600;
-  color: #534a00;
-}
-.confirm-mini:not(.hidden) { display: flex; }
-
-.confirm-mini .btn {
-  padding: .3rem .6rem;
-  font-size: .9rem;
-}
-.confirm-mini .btn.btn-secondary {
-  background: #e0e0e0;
-  color: #333;
-  border-color: #c7c7c7;
-}
-
-
-/* css/combat-table.css */
-
-/* ... (all other CSS rules are correct) ... */
-
-
-
-/* === BULK ACTIONS BAR (RESTORED) === */
-/* Bulk actions bar — keep it compact and single-line */
-.bulk-actions-bar {
-  display: none;
-  position: sticky;         /* optional: sticks under the controls row */
-  top: 0;                   /* align with your sticky header if desired */
-  z-index: 9;
-
-  align-items: center;
-  gap: .75rem;
-
-  min-height: 44px;         /* 👈 guarantees a sane height */
-  padding: 6px 10px;
-  line-height: 1.2;         /* 👈 prevents tall lines */
-  white-space: nowrap;      /* 👈 keeps label from wrapping */
-}
-
-.bulk-actions-bar.visible { display: grid; }
-
-/* Reset margins so nothing “expands” the bar */
-.bulk-actions-bar * {
-  margin: 0;
-}
-
-
-#selectionCounter { 
-  font-weight: 700; 
-}
-
-.bulk-actions-actions {
-  display: flex;            /* simpler, predictable */
-  gap: .5rem;
-  align-items: center;
-  flex-wrap: nowrap;        /* 👈 don't wrap onto a new line */
-  overflow-x: auto;         /* 👈 scroll horizontally if crowded */
-  max-width: 100%;
-}
-
-.bulk-actions-actions button {
-  flex: 0 0 auto;           /* 👈 keep natural size; no stretch */
-  white-space: nowrap;
-}
-
-
-.bulk-actions-actions button:hover { 
-  background-color: #6ca05b; 
-}
-
-/* Responsive styles for the bulk actions bar */
-@media (max-width: 800px) {
-  .bulk-actions-bar {
-    grid-template-columns: 1fr;
-    row-gap: 0.5rem;
-  }
-  .bulk-actions-actions {
-    grid-auto-flow: row;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    justify-content: stretch;
-  }
-}
-
-
-/* INIT SORTING */
-.init-cell button {
-  background: none;
-  border: none;
-  font-size: 0.8rem;
-  cursor: pointer;
-  padding: 0 2px;
-  line-height: 1;
-}
-.init-cell button:hover {
-  color: #333;
-}
-
-
-
-/* Inline editing affordances */
-.editable-text,
-.editable-int {
-  cursor: text;
-  border-bottom: 1px dashed transparent;
-}
-.editable-text:hover,
-.editable-int:hover {
-  border-bottom-color: rgba(0,0,0,.2);
-}
-
-/* The input that replaces the span while editing */
-.inline-editor {
-  width: 100%;
-  max-width: 140px;          /* keeps cells from ballooning */
-  box-sizing: border-box;
-  font: inherit;
-  padding: 2px 4px;
-  border: 1px solid #bdbdbd;
-  border-radius: 3px;
-  background: #fffef7;
-  outline: none;
-}
-.inline-editor:focus {
-  border-color: #7fb069;
-  box-shadow: 0 0 0 2px rgba(127,176,105,.25);
-}
-
-.name-cell .inline-editor { max-width: 220px; }
+.inline-editor:focus{ border-color:#7fb069; box-shadow:0 0 0 2px rgba(127,176,105,.25); }
+.name-cell .inline-editor{ max-width:220px; }
