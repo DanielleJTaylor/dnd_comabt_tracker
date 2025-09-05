@@ -1,0 +1,164 @@
+/* ### 2. `view-dashboards.css`
+
+This CSS file provides the styling for the dashboard list page. 
+It creates a clean, card-based layout that is easy to read and navigate. 
+The styles are designed to be consistent with the parchment and green theme of your application. */
+
+
+/* General Body and Layout */
+body {
+    font-family: sans-serif;
+    background: #f6e4c1; /* Parchment background */
+    color: #333;
+    margin: 0;
+    padding: 20px;
+}
+
+#dashboard-viewer {
+    max-width: 1200px;
+    margin: 0 auto;
+    background: #e8d7b3; /* Darker parchment for the main container */
+    border: 2px solid #d0bfa2;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+/* Header */
+#dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background: #f6e4c1;
+    border-bottom: 2px solid #d0bfa2;
+    border-radius: 8px 8px 0 0;
+}
+
+#dashboard-header h1 {
+    margin: 0;
+    font-size: clamp(1.5rem, 2.5vw, 2.2rem);
+    font-family: "Georgia", serif;
+}
+
+/* Control Buttons */
+.dashboard-controls {
+    display: flex;
+    gap: 10px;
+    padding: 1rem 1.5rem;
+    border-bottom: 2px solid #d0bfa2;
+}
+
+.btn, .dashboard-controls button {
+    background: #7fb069;
+    color: #fff;
+    border: 1px solid #6ca05b;
+    border-radius: 6px;
+    padding: .5rem 1rem;
+    font-size: 1rem;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    transition: background-color 0.2s ease;
+}
+
+.btn:hover, .dashboard-controls button:hover {
+    background: #6ca05b;
+}
+
+/* Main List Container */
+#dashboard-list-container {
+    padding: 1.5rem;
+    display: grid;
+    /* Responsive grid for dashboard cards */
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+}
+
+/* Individual Dashboard Card */
+.dashboard-card {
+    background: #fff;
+    border: 1px solid #d0bfa2;
+    border-radius: 6px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dashboard-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+}
+
+.card-header {
+    padding: 1rem;
+    font-size: 1.2rem;
+    font-weight: bold;
+    border-bottom: 1px solid #eee;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.card-body {
+    flex-grow: 1;
+    padding: 1rem;
+    color: #555;
+    font-size: 0.9rem;
+}
+
+.card-footer {
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+    color: #888;
+    background: #fafafa;
+    border-top: 1px solid #eee;
+    border-radius: 0 0 6px 6px;
+    text-align: right;
+}
+
+
+
+.dash-breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  padding: .75rem 1.5rem .25rem;
+  border-bottom: 1px solid #d0bfa2;
+  background: #f6e4c1;
+}
+
+.dash-breadcrumbs a, .dash-breadcrumbs span {
+  color: #245; text-decoration: none; font-weight: 600; cursor: pointer;
+}
+.dash-breadcrumbs .sep { opacity: .6; padding: 0 .25rem; }
+
+.folder-card {
+  background: #fff;
+  border: 1px solid #d0bfa2;
+  border-radius: 6px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  display: flex; flex-direction: column;
+  text-decoration: none; color: inherit;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.folder-card:hover { transform: translateY(-5px); box-shadow: 0 6px 12px rgba(0,0,0,0.1); }
+.folder-card .card-header { padding: 1rem; font-weight: bold; border-bottom: 1px solid #eee; }
+.folder-card .card-body   { padding: 1rem; color: #555; }
+
+
+
+
+/* Drag affordances */
+.dashboard-card, .folder-card { cursor: grab; }
+.dashboard-card:active, .folder-card:active { cursor: grabbing; }
+
+.drop-ok   { outline: 2px dashed #7fb069; outline-offset: 3px; }
+.drop-bad  { outline: 2px dashed #c0392b; outline-offset: 3px; }
+
+.dash-breadcrumbs a.drop-ok { box-shadow: 0 0 0 2px #7fb069 inset; border-radius: 4px; }
+.dash-breadcrumbs a.drop-bad { box-shadow: 0 0 0 2px #c0392b inset; border-radius: 4px; }

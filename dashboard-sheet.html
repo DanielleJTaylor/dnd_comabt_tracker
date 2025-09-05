@@ -12,12 +12,19 @@
 <body>
     <div id="sheet-container">
         <header class="sheet-header">
-            <a href="view-dashboards.html" class="btn">← Back</a>
-            <h1 id="sheet-title" contenteditable="true">Turnden Forewit</h1>
-            <button id="lock-toggle-btn" class="btn unlocked">🔓 Unlocked</button>
+            <div class="header-left">
+                <a href="view-dashboards.html" class="btn">← Back</a>
+                <h1 id="sheet-title" contenteditable="true">Untitled Dashboard</h1>
+            </div>
+            <div class="header-right">
+                <button id="export-btn" class="btn">Export</button>
+                <button id="save-status-btn" class="btn btn-status">Saved</button>
+                <button id="lock-toggle-btn" class="btn unlocked">🔓 Unlocked</button>
+            </div>
         </header>
 
         <div id="format-toolbar" class="format-toolbar">
+            <!-- Toolbar buttons remain the same -->
             <button data-command="bold" title="Bold"><b>B</b></button>
             <button data-command="italic" title="Italic"><i>I</i></button>
             <button data-command="underline" title="Underline"><u>U</u></button>
@@ -33,9 +40,7 @@
             <button data-command="insertUnorderedList" title="Bulleted List">List</button>
         </div>
 
-        <main id="blocks-container" class="grid-container">
-            <!-- All blocks will be dynamically added here by JavaScript -->
-        </main>
+        <main id="blocks-container" class="grid-container"></main>
         
         <button id="add-block-btn" class="btn">+</button>
     </div>
