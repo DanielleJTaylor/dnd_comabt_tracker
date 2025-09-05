@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function showDashboards() {
-    app.classList.add('dashboard-visible');
+    app.classList.toggle('dashboard-visible');
     setRightPct(getStoredPct());
   }
 

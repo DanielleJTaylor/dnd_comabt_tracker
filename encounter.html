@@ -5,46 +5,51 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DnD Sidekick</title>
     <link rel="icon" type="image/png" href="images/icon.png">
-
-    <!-- CSS Links -->
     <link rel="stylesheet" href="css/tracker.css">
     <link rel="stylesheet" href="css/combat-table.css">
-    <!-- Keep other project-specific CSS if needed -->
     <link rel="stylesheet" href="css/link-sheet.css">
-
-    <!-- JavaScript files (deferred to load after HTML) -->
-    <!-- These are kept as per your project structure -->
-    <script src="scripts/app.js" defer></script>
-    <script src="scripts/history-log.js" defer></script>
-    <!-- The two core scripts for the tracker functionality -->
+    
+    <!-- Core Tracker Scripts -->
     <script src="scripts/combat_tracker.js" defer></script>
     <script src="scripts/group-selector.js" defer></script>
-    <!-- Other project-specific scripts -->
+    
+    <!-- NEW: Script to manage the interactive dashboard sidebar -->
+    <script src="scripts/encounter-dashboards.js" defer></script>
+    
+    <!-- Other scripts -->
+    <script src="scripts/app.js" defer></script>
+    <script src="scripts/history-log.js" defer></script>
     <script src="scripts/link-sheet.js" defer></script>
     <script src="scripts/dashboard.js" defer></script>
 </head>
 <body>
-    <!-- Main container for the two-panel layout -->
     <div id="app-container">
-
         <!-- RIGHT: Dashboards panel (Initially hidden) -->
+         <!-- RIGHT: Dashboards panel -->
         <section id="right-dashboard">
-            <div id="dash-resizer" aria-label="Resize dashboards panel" title="Drag to resize"></div>
+            <div id="dash-resizer"></div>
+            
+            <!-- A single header for the entire panel -->
+            <header id="dashboard-panel-header">
+                <div id="panel-header-list-view">
+                    <h3>📁 Dashboards</h3>
+                </div>
+                <div id="panel-header-editor-view" class="hidden">
+                    <button id="sdBackBtn" class="btn">← Back to List</button>
+                    <h3 id="sdViewerTitle"></h3>
+                </div>
+                <button id="closeDashboardBtn" title="Close Panel">✖</button>
+            </header>
 
-            <div id="dashboard-header">
-                <h3>📁 Dashboards</h3>
-               <button id="closeDashboardBtn">✖</button>
+            <!-- A single iframe to hold either the list or the editor -->
+            <div id="dashboard-frame-container">
+                <iframe id="dashboard-frame" title="Dashboard content"></iframe>
             </div>
-            <div class="dashboard-controls">
-                <button id="newDashboardBtn">➕ New Dashboard</button>
-                <button id="newFolderBtn">📁 New Folder</button>
-            </div>
-            <div id="dashboard-list-container" class="dashboard-list"></div>
         </section>
 
         <!-- LEFT: Main Tracker panel -->
         <section id="left-tracker">
-
+            <!-- Header, controls, and table remain the same -->
             <header class="tracker-header">
                 <div class="header-left-group">
                     <button class="back-btn" onclick="history.back()">⬅ Back</button>

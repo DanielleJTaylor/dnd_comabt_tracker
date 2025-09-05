@@ -17,11 +17,12 @@ html, body { height: 100%; margin: 0; padding: 0; }
 
 /* --- Dashboard Panel Styles --- */
 #dashboard-header {
-  background-color: #444;
+  background-color: #333; /* Darker for better contrast */
   display: flex;
   justify-content: space-between;
-  align-items: stretch;
+  align-items: center; /* Use center for vertical alignment */
   padding: 0.5rem 1rem;
+  flex-shrink: 0; /* Prevent header from shrinking */
 }
 #dashboard-header h3 {
   font-size: clamp(0.9rem, 1.5vw + 0.4rem, 1.5rem);
@@ -32,29 +33,27 @@ html, body { height: 100%; margin: 0; padding: 0; }
 /* --- Left column as a grid that can shrink safely --- */
 #left-tracker {
   flex-grow: 1;
-  width: 0;               /* allow shrink */
-  min-width: 0;           /* critical to allow inner overflow to show */
+  width: 0;
+  min-width: 0;
   display: grid;
-  /* header / controls / banners ... then the table area fills the rest */
   grid-template-rows: auto auto auto auto auto 1fr;
 }
 
 /* Right panel visuals */
 #right-dashboard {
-  width: 0;               /* collapsed by default */
+  width: 0;
   flex-shrink: 0;
   display: flex;
   background-color: #2c2c2c;
   border-left: 2px solid #00bfa6;
   flex-direction: column;
   overflow: hidden;
-  position: relative;     /* for resizer positioning */
+  position: relative;
 }
 
-/* When visible, width = clamp(15%, var(--right-pct, 45%), 85%) */
-#app-container.dashboard-visible { --right-pct: 45%; }   /* default 45% */
+#app-container.dashboard-visible { --right-pct: 45%; }
 #app-container.dashboard-visible #right-dashboard {
-  flex: 0 0 clamp(15%, var(--right-pct, 45%), 65%);
+  flex: 0 0 clamp(20%, var(--right-pct, 45%), 80%); /* Adjusted clamp values */
   width: auto;
   min-width: 0;
 }
@@ -63,56 +62,37 @@ html, body { height: 100%; margin: 0; padding: 0; }
   width: auto;
 }
 
-/* Let <main> children participate directly in the grid rows */
 main.tracker-wrapper { display: contents; }
 
-/* Resizer (optional) */
 #dash-resizer{
   position:absolute; left:-4px; top:0; bottom:0; width:8px;
-  cursor: col-resize; background: transparent; z-index:5;
+  cursor: col-resize; background: transparent; z-index:100;
 }
 #dash-resizer:hover, #dash-resizer.resizing{
-  background: linear-gradient(to right, rgba(0,191,166,.15), rgba(0,191,166,.3), rgba(0,191,166,.15));
+  background: rgba(0,191,166,.3);
 }
-body.resizing-col { user-select: none; }
+body.resizing-col { user-select: none; cursor: col-resize; }
 
 /* --- Header styles --- */
 .tracker-header {
-  display: flex;
-  justify-content: space-between;
-  background-color: #f6e4c1;
-  border-bottom: 2px solid #d0bfa2;
-  gap: 1rem;
-  height: 8vh;
-  min-height: 50px;
-  align-items: center;
+  display: flex; justify-content: space-between; background-color: #f6e4c1;
+  border-bottom: 2px solid #d0bfa2; gap: 1rem; height: 8vh; min-height: 50px; align-items: center;
 }
 .header-left-group {
-  display: flex; align-items: center; gap: .75rem;
-  min-width: 0; flex: 0 1 auto; height: 100%;
+  display: flex; align-items: center; gap: .75rem; min-width: 0; flex: 0 1 auto; height: 100%;
 }
 .tracker-header .back-btn {
-  background:#7fb069; color:#fff; border:0;
-  display:flex; align-items:center; padding:0 1rem; flex-shrink:0; height:100%;
+  background:#7fb069; color:#fff; border:0; display:flex; align-items:center;
+  padding:0 1rem; flex-shrink:0; height:100%;
 }
 .tracker-header h1 {
-  margin:0; padding-left:1rem;
-  font-size: clamp(1.2rem, 2vw + .5rem, 2.2rem);
+  margin:0; padding-left:1rem; font-size: clamp(1.2rem, 2vw + .5rem, 2.2rem);
   font-family: "Georgia", serif; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
 }
 .header-right-controls {
-  display:flex; align-items:center; gap:.75rem;
-  flex:1 1 auto; justify-content:flex-end; min-width:0; padding-right:1rem;
+  display:flex; align-items:center; gap:.75rem; flex:1 1 auto;
+  justify-content:flex-end; min-width:0; padding-right:1rem;
 }
-
-/* Buttons */
-.button-group { display:flex; flex-wrap:nowrap; gap:.5rem; }
-.button-group button {
-  background:#7fb069; color:#fff; border:1px solid #6ca05b; cursor:pointer;
-  padding:6px 12px; border-radius:4px; font-size:clamp(.4rem, 1vw + .2rem, 1rem);
-  white-space:nowrap; transition: background-color .2s ease;
-}
-.button-group button:hover { background:#6ca05b; }
 
 /* Controls row */
 .controls-row{
@@ -134,6 +114,7 @@ body.resizing-col { user-select: none; }
 .btn > :first-child{ flex:0 0 auto; }
 .btn .label{ overflow:hidden; text-overflow:ellipsis; }
 
+
 @container (max-width:960px){ .header-right-controls .btn{ padding:.3rem .5rem; } }
 @container (max-width:830px){ .header-right-controls .btn .label{ display:none; } }
 @container (max-width:1100px){ .controls-row .btn{ padding:.28rem .48rem; } }
@@ -143,4 +124,62 @@ body.resizing-col { user-select: none; }
   font-size: clamp(.7rem, .9vw + .2rem, 1rem);
   padding:.3rem .5rem; text-align:center; font-weight:bold;
   background:#e6d3b0; border-radius:5px; border:1px solid #d0bfa2; white-space:nowrap; flex-shrink:0;
+}
+
+
+
+
+
+
+/* css/tracker.css */
+/* ... (all existing tracker styles) ... */
+
+/* ===== Right Dashboard Panel (Iframe Host) ===== */
+
+#right-dashboard {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+    background-color: #e8d7b3; /* Parchment base */
+    border-left: 2px solid #d0bfa2;
+}
+
+/* --- Panel Header --- */
+#dashboard-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background: #f6e4c1;
+    border-bottom: 2px solid #d0bfa2;
+    flex-shrink: 0;
+}
+#dashboard-panel-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: #5c5c5c;
+}
+#panel-header-editor-view {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+.hidden { display: none !important; }
+
+/* --- Iframe Container --- */
+#dashboard-frame-container {
+    flex-grow: 1;
+    min-height: 0;
+    position: relative;
+}
+#dashboard-frame {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
 }

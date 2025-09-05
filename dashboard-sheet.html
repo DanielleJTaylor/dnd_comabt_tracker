@@ -9,6 +9,18 @@
     <script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
     <script src="scripts/dashboard-sheet.js" defer></script>
 </head>
+    
+    <!-- NEW: Instant script to detect embed mode -->
+    <script>
+        (function() {
+            try {
+                if (new URLSearchParams(location.search).get('embed') === '1') {
+                    document.documentElement.classList.add('embed');
+                }
+            } catch (e) {}
+        })();
+    </script>
+
 <body>
     <div id="sheet-container">
         <header class="sheet-header">

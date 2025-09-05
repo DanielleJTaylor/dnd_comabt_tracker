@@ -162,3 +162,26 @@ body {
 
 .dash-breadcrumbs a.drop-ok { box-shadow: 0 0 0 2px #7fb069 inset; border-radius: 4px; }
 .dash-breadcrumbs a.drop-bad { box-shadow: 0 0 0 2px #c0392b inset; border-radius: 4px; }
+
+
+
+/* css/view-dashboards.css */
+/* ... (all existing styles) ... */
+
+/* === EMBED MODE === */
+/* Hide redundant elements when loaded in an iframe */
+html.embed #dashboard-header {
+    display: none;
+}
+
+/* Remove page padding when embedded */
+html.embed body {
+    padding: 0;
+}
+
+/* Remove border/shadow from the container when embedded */
+html.embed #dashboard-viewer {
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+}
