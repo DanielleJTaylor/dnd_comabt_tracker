@@ -1,185 +1,319 @@
 /* css/tracker.css */
 
-/* keep layout from jumping when scrollbars appear */
-html { scrollbar-gutter: stable; }
+/*
+  This prevents layout shift when the scrollbar appears/disappears,
+  ensuring your layout stays stable.
+*/
+html {
+  scrollbar-gutter: stable;
+}
 
-html, body { height: 100%; margin: 0; padding: 0; }
-
-#app-container {
-  display: flex;
-  width: 100%;
+html,
+body {
   height: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 /* --- Panel placement (dashboard on right) --- */
-#left-tracker { order: 1; }
-#right-dashboard { order: 2; }
+#left-tracker {
+  order: 1; /* main panel, fills remaining space */
+}
+#right-dashboard {
+  order: 1; /* main panel, fills remaining space */
+}
 
 /* --- Dashboard Panel Styles --- */
 #dashboard-header {
-  background-color: #333; /* Darker for better contrast */
+  background-color: #444;
   display: flex;
   justify-content: space-between;
-  align-items: center; /* Use center for vertical alignment */
+  align-items: stretch; /* Use align-items for single-line vertical centering */
   padding: 0.5rem 1rem;
-  flex-shrink: 0; /* Prevent header from shrinking */
 }
+
 #dashboard-header h3 {
   font-size: clamp(0.9rem, 1.5vw + 0.4rem, 1.5rem);
   margin: 0;
   color: white;
 }
 
-/* --- Left column as a grid that can shrink safely --- */
+/* Ensure the tracker column is a proper grid and doesn't overflow */
+/* Ensure the tracker column is a proper grid and handles shrinking */
+/* css/tracker.css */
+
+/* ... other styles ... */
+
+/* Ensure the tracker column is a proper grid and handles shrinking */
+/* LEFT: main tracker – just fill whatever space is left */
+/* ---- Adjustable Right Dashboard ---- */
+#app-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  /* driving variable + bounds for the right panel */
+  --right-min: 10%;
+  --right-max: 80%;
+  --right-pct: 45%; /* default; JS updates this on drag */
+}
+
+/* Left takes remaining space; allow inner scrolling to work */
 #left-tracker {
-  flex-grow: 1;
-  width: 0;
-  min-width: 0;
+  order: 1;
+  flex: 1 1 auto;
+  min-width: 0;     /* critical so the table can scroll horizontally */
+  width: auto;
   display: grid;
   grid-template-rows: auto auto auto auto auto 1fr;
 }
 
-/* Right panel visuals */
+/* Right is collapsed when hidden */
 #right-dashboard {
+  order: 2;
+  flex: 0 0 0;
   width: 0;
-  flex-shrink: 0;
-  display: flex;
-  background-color: #2c2c2c;
-  border-left: 2px solid #00bfa6;
-  flex-direction: column;
-  overflow: hidden;
-  position: relative;
-}
-
-#app-container.dashboard-visible { --right-pct: 45%; }
-#app-container.dashboard-visible #right-dashboard {
-  flex: 0 0 clamp(20%, var(--right-pct, 45%), 80%); /* Adjusted clamp values */
-  width: auto;
   min-width: 0;
+  overflow: hidden;
+  position: relative;       /* for the resizer */
+  background: #2c2c2c;
+  border-left: 2px solid #00bfa6;
 }
-#app-container.dashboard-visible #left-tracker {
-  flex: 1 1 auto;
+
+/* When visible, the right side uses the clamped CSS variable */
+#app-container.dashboard-visible #right-dashboard {
+  flex: 0 0 clamp(var(--right-min), var(--right-pct), var(--right-max));
   width: auto;
 }
 
-main.tracker-wrapper { display: contents; }
-
-#dash-resizer{
-  position:absolute; left:-4px; top:0; bottom:0; width:8px;
-  cursor: col-resize; background: transparent; z-index:100;
+/* Let the iframe fill the panel height without layout fights */
+#dashboard-frame-container {
+  position: absolute;
+  inset: 44px 0 0 0;  /* below header; adjust if your header height differs */
 }
-#dash-resizer:hover, #dash-resizer.resizing{
-  background: rgba(0,191,166,.3);
+#dashboard-panel-header {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 44px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: .5rem;
+  padding: 0 .75rem;
+  background: #f6e4c1;
+  border-bottom: 2px solid #d0bfa2;
+  z-index: 2;
 }
-body.resizing-col { user-select: none; cursor: col-resize; }
-
-/* --- Header styles --- */
-.tracker-header {
-  display: flex; justify-content: space-between; background-color: #f6e4c1;
-  border-bottom: 2px solid #d0bfa2; gap: 1rem; height: 8vh; min-height: 50px; align-items: center;
-}
-.header-left-group {
-  display: flex; align-items: center; gap: .75rem; min-width: 0; flex: 0 1 auto; height: 100%;
-}
-.tracker-header .back-btn {
-  background:#7fb069; color:#fff; border:0; display:flex; align-items:center;
-  padding:0 1rem; flex-shrink:0; height:100%;
-}
-.tracker-header h1 {
-  margin:0; padding-left:1rem; font-size: clamp(1.2rem, 2vw + .5rem, 2.2rem);
-  font-family: "Georgia", serif; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.header-right-controls {
-  display:flex; align-items:center; gap:.75rem; flex:1 1 auto;
-  justify-content:flex-end; min-width:0; padding-right:1rem;
+#dashboard-frame {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  width: 100%;
+  height: 100%;
 }
 
-/* Controls row */
-.controls-row{
-  display:flex; align-items:center; justify-content:center; flex-wrap:nowrap;
-  gap:clamp(.25rem, .8vw, .5rem);
-  padding: clamp(.2rem, .7vw, .5rem) clamp(.4rem, .9vw, 1rem);
-  background:#f6e4c1; border-top:2px solid #d0bfa2; border-bottom:2px solid #d0bfa2;
-  overflow-x:auto; -webkit-overflow-scrolling:touch;
+/* Resizer—sits on LEFT edge of the right panel */
+#dash-resizer {
+  position: absolute;
+  left: -4px; top: 0; bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 5;
 }
-
-.header-right-controls, .controls-row { container-type: inline-size; }
-
-.btn{
-  display:inline-flex; align-items:center; gap:.4rem; white-space:nowrap;
-  font-size: clamp(.72rem, 1vw + .2rem, 1rem);
-  padding:.35rem .6rem; background:#7fb069; color:#fff; border:1px solid #6ca05b; border-radius:4px; cursor:pointer;
+#dash-resizer.resizing {
+  background: rgba(0,191,166,.15);
+  box-shadow: inset 0 0 0 1px rgba(0,191,166,.6);
 }
-.btn:hover{ background:#6ca05b; }
-.btn > :first-child{ flex:0 0 auto; }
-.btn .label{ overflow:hidden; text-overflow:ellipsis; }
-
-
-@container (max-width:960px){ .header-right-controls .btn{ padding:.3rem .5rem; } }
-@container (max-width:830px){ .header-right-controls .btn .label{ display:none; } }
-@container (max-width:1100px){ .controls-row .btn{ padding:.28rem .48rem; } }
-@container (max-width:1100px){ .controls-row .btn .label{ display:none; } }
-
-#roundCounter, #currentTurnDisplay{
-  font-size: clamp(.7rem, .9vw + .2rem, 1rem);
-  padding:.3rem .5rem; text-align:center; font-weight:bold;
-  background:#e6d3b0; border-radius:5px; border:1px solid #d0bfa2; white-space:nowrap; flex-shrink:0;
-}
-
-
 
 
 
 
 /* css/tracker.css */
-/* ... (all existing tracker styles) ... */
 
-/* ===== Right Dashboard Panel (Iframe Host) ===== */
+/* ... other styles ... */
 
-#right-dashboard {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    min-height: 0;
-    position: relative;
-    overflow: hidden;
-    background-color: #e8d7b3; /* Parchment base */
-    border-left: 2px solid #d0bfa2;
+
+/* --- Consolidated and Corrected Header Styles --- */
+.tracker-header {
+  display: flex;
+  justify-content: space-between;
+  background-color: #f6e4c1;
+  border-bottom: 2px solid #d0bfa2;
+  gap: 1rem;
+  height: 8vh;
+  min-height: 50px;
+  align-items: center; /* This can stay as it is */
+
+  /* REMOVED: Padding is now handled by the child elements for more control */
+  /* padding: 0 1rem; */
 }
 
-/* --- Panel Header --- */
-#dashboard-panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.5rem 1rem;
-    background: #f6e4c1;
-    border-bottom: 2px solid #d0bfa2;
-    flex-shrink: 0;
-}
-#dashboard-panel-header h3 {
-    margin: 0;
-    font-size: 1.2rem;
-    color: #5c5c5c;
-}
-#panel-header-editor-view {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-.hidden { display: none !important; }
+/* --- LEFT SIDE (back + title) --- */
+.header-left-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 0 1 auto;
 
-/* --- Iframe Container --- */
-#dashboard-frame-container {
-    flex-grow: 1;
-    min-height: 0;
-    position: relative;
+  /* ADDED: This makes the container fill the header's height */
+  height: 100%; 
 }
-#dashboard-frame {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    border: 0;
+
+/* --- Back button --- */
+.tracker-header .back-btn {
+  background-color: #7fb069;
+  color: white;
+  border: none;
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+  flex-shrink: 0;
+  height: 100%; /* This now works correctly */
 }
+
+/* --- Title shrinks with ellipsis --- */
+.tracker-header h1 {
+  margin: 0;
+  /* ADDED: Add padding here to create space next to the button */
+  padding-left: 1rem; 
+  font-size: clamp(1.2rem, 2vw + 0.5rem, 2.2rem);
+  font-family: "Georgia", serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- RIGHT CONTROLS --- */
+.header-right-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  min-width: 0;
+  
+  /* ADDED: Re-applies the right-side padding that was removed from the header */
+  padding-right: 1rem;
+}
+
+
+/* ... rest of the file remains unchanged ... */
+
+/* Button group inside right controls */
+.button-group {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+}
+
+.button-group button {
+  background-color: #7fb069;
+  color: white;
+  border: 1px solid #6ca05b;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: clamp(0.4rem, 1vw + 0.2rem, 1rem);
+  white-space: nowrap;
+  transition: background-color 0.2s ease;
+}
+
+.button-group button:hover {
+  background-color: #6ca05b;
+}
+
+/* --- Controls Row: single-line grid that compresses nicely --- */
+.controls-row {
+  display: flex; /* Changed to flex for better alignment and responsiveness */
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap; /* Prevents wrapping onto a new line */
+  gap: clamp(0.25rem, 0.8vw, 0.5rem);
+  padding: clamp(0.2rem, 0.7vw, 0.5rem) clamp(0.4rem, 0.9vw, 1rem);
+  background-color: #f6e4c1;
+  border-top: 2px solid #d0bfa2;
+  border-bottom: 2px solid #d0bfa2;
+  overflow-x: auto; /* Adds a scrollbar if the row is too wide */
+  -webkit-overflow-scrolling: touch;
+}
+
+
+/* Make these containers queryable by width */
+.header-right-controls,
+.controls-row {
+  container-type: inline-size;
+}
+
+/* Base button look */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+  font-size: clamp(0.72rem, 1vw + 0.2rem, 1rem);
+  padding: 0.35rem 0.6rem;
+  background-color: #7fb069;
+  color: #fff;
+  border: 1px solid #6ca05b;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background-color: #6ca05b;
+}
+
+/* Keep icon from shrinking weirdly */
+.btn > :first-child {
+  flex: 0 0 auto;
+}
+
+/* Let the label shrink but not wrap */
+.btn .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- Container Queries for Responsive Design --- */
+
+/* === HEADER RIGHT CONTROLS === */
+@container (max-width: 960px) {
+  .header-right-controls .btn {
+    padding: 0.3rem 0.5rem;
+  }
+}
+
+@container (max-width: 830px) {
+  .header-right-controls .btn .label {
+    display: none;
+  }
+}
+
+/* === CONTROLS ROW === */
+@container (max-width: 1100px) {
+  .controls-row .btn {
+    padding: 0.28rem 0.48rem;
+  }
+}
+
+@container (max-width: 1100px) {
+  .controls-row .btn .label {
+    display: none;
+  }
+}
+
+/* --- Style for the text-based grid items --- */
+#roundCounter,
+#currentTurnDisplay {
+  font-size: clamp(0.7rem, 0.9vw + 0.2rem, 1rem);
+  padding: 0.3rem 0.5rem;
+  text-align: center;
+  font-weight: bold;
+  background-color: #e6d3b0;
+  border-radius: 5px;
+  border: 1px solid #d0bfa2;
+  white-space: nowrap;
+  flex-shrink: 0; /* Prevents shrinking */
+}
+

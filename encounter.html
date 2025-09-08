@@ -13,7 +13,7 @@
     <script src="scripts/combat_tracker.js" defer></script>
     <script src="scripts/group-selector.js" defer></script>
     
-    <!-- NEW: Script to manage the interactive dashboard sidebar -->
+    <!-- Sidebar dashboards controller -->
     <script src="scripts/encounter-dashboards.js" defer></script>
     
     <!-- Other scripts -->
@@ -23,36 +23,36 @@
     <script src="scripts/dashboard.js" defer></script>
 </head>
 <body>
-    <div id="app-container">
-        <!-- RIGHT: Dashboards panel (Initially hidden) -->
-         <!-- RIGHT: Dashboards panel -->
-        <section id="right-dashboard">
-            <div id="dash-resizer"></div>
+    <!-- Add default right width via CSS var (45%). JS can update this var when dragging. -->
+    <div id="app-container" style="--right-pct:45%;">
+        <!-- RIGHT: Dashboards panel (Initially hidden; class 'dashboard-visible' is toggled by JS) -->
+        <section id="right-dashboard" aria-label="Dashboards sidebar">
+            <!-- Optional: min/max hints if you later read these in JS -->
+            <div id="dash-resizer" data-min="10" data-max="80" aria-label="Resize dashboards panel" role="separator"></div>
             
-            <!-- A single header for the entire panel -->
+            <!-- Panel header (list vs editor labels) -->
             <header id="dashboard-panel-header">
                 <div id="panel-header-list-view">
                     <h3>📁 Dashboards</h3>
                 </div>
                 <div id="panel-header-editor-view" class="hidden">
-                    <button id="sdBackBtn" class="btn">← Back to List</button>
+                    <button id="sdBackBtn" class="btn" type="button">← Back to List</button>
                     <h3 id="sdViewerTitle"></h3>
                 </div>
-                <button id="closeDashboardBtn" title="Close Panel">✖</button>
+                <button id="closeDashboardBtn" class="btn" type="button" title="Close Panel">✖</button>
             </header>
 
-            <!-- A single iframe to hold either the list or the editor -->
+            <!-- Single iframe swaps between view-dashboards and dashboard-sheet -->
             <div id="dashboard-frame-container">
-                <iframe id="dashboard-frame" title="Dashboard content"></iframe>
+                <iframe id="dashboard-frame" title="Dashboard content" referrerpolicy="no-referrer"></iframe>
             </div>
         </section>
 
-        <!-- LEFT: Main Tracker panel -->
-        <section id="left-tracker">
-            <!-- Header, controls, and table remain the same -->
+        <!-- LEFT: Main Tracker -->
+        <section id="left-tracker" aria-label="Combat tracker">
             <header class="tracker-header">
                 <div class="header-left-group">
-                    <button class="back-btn" onclick="history.back()">⬅ Back</button>
+                    <button class="back-btn" type="button" onclick="history.back()">⬅ Back</button>
                     <h1>🧝‍♂️ D&D Combat Tracker</h1>
                 </div>
                 <div class="header-right-controls">
@@ -61,51 +61,47 @@
                         <span class="slider"></span>
                     </label>
                     <div class="button-group">
-                        <button id="addCombatantBtn" class="btn">➕ <span class="label">Add Combatant</span></button>
-                        <button id="addGroupBtn" class="btn">➕ <span class="label">Add Group</span></button>
-                        <button id="startEncounterBtn" class="btn">▶ <span class="label">Reset Encounter</span></button>
+                        <button id="addCombatantBtn" class="btn" type="button">➕ <span class="label">Add Combatant</span></button>
+                        <button id="addGroupBtn" class="btn" type="button">➕ <span class="label">Add Group</span></button>
+                        <button id="startEncounterBtn" class="btn" type="button">▶ <span class="label">Reset Encounter</span></button>
                     </div>
                 </div> 
             </header>
 
             <main class="tracker-wrapper">
                 <div class="controls-row">
-                    <button id="lockGroupSelectionBtn" class="btn">🔒 <span class="label">Lock Groups</span></button>
-                    <button id="historyLogBtn" class="btn">📜 <span class="label">History</span></button>
+                    <button id="lockGroupSelectionBtn" class="btn" type="button">🔒 <span class="label">Lock Groups</span></button>
+                    <button id="historyLogBtn" class="btn" type="button">📜 <span class="label">History</span></button>
                     <span id="roundCounter">Round: 1</span>
-                    <button class="btn">⬅ <span class="label">Prev Turn</span></button>
+                    <button class="btn" type="button">⬅ <span class="label">Prev Turn</span></button>
                     <div id="currentTurnDisplay">🟢 Current Turn: <strong>None</strong></div>
-                    <button class="btn">➡ <span class="label">Next Turn</span></button>
-                    <button class="btn">💾 <span class="label">Save</span></button>
-                    <button class="btn">📂 <span class="label">Load</span></button>
-                    <button class="btn">🗑️ <span class="label">Clear</span></button>
-                    <button id="seeDashboardsBtn" class="btn">📋 <span class="label">Dashboards</span></button>
+                    <button class="btn" type="button">➡ <span class="label">Next Turn</span></button>
+                    <button class="btn" type="button">💾 <span class="label">Save</span></button>
+                    <button class="btn" type="button">📂 <span class="label">Load</span></button>
+                    <button class="btn" type="button">🗑️ <span class="label">Clear</span></button>
+                    <button id="seeDashboardsBtn" class="btn" type="button">📋 <span class="label">Dashboards</span></button>
                 </div>
 
-                <div id="bulkActionsBar" class="bulk-actions-bar">
+                <div id="bulkActionsBar" class="bulk-actions-bar" aria-live="polite">
                     <span id="selectionCounter">0 selected</span>
                     <div class="bulk-actions-actions">
-                        <button id="bulkDamageHealBtn">Damage / Heal</button>
-                        <button id="bulkDeleteBtn">Delete Selected</button>
-                        <button id="bulkGroupBtn">Move to Group</button>
+                        <button id="bulkDamageHealBtn" type="button">Damage / Heal</button>
+                        <button id="bulkDeleteBtn" type="button">Delete Selected</button>
+                        <button id="bulkGroupBtn" type="button">Move to Group</button>
                     </div>
                 </div>
                 
-                <!-- Hint shown after pressing “Move to Group” -->
                 <div id="choose-group-hint" class="hint-banner hidden">
-                👉 Please choose a group (click a group row) to move the selected combatants.
+                    👉 Please choose a group (click a group row) to move the selected combatants.
                 </div>
 
-                <!-- Mini confirm bar (appears after clicking a group row) -->
                 <div id="confirm-move-mini" class="confirm-mini hidden">
                     <span id="confirm-mini-text">Move 0 selected to “Group”?</span>
                     <div class="confirm-mini-actions">
-                        <button id="confirm-mini-yes" class="btn">Move</button>
-                        <button id="confirm-mini-no"  class="btn btn-secondary">Cancel</button>
+                        <button id="confirm-mini-yes" class="btn" type="button">Move</button>
+                        <button id="confirm-mini-no" class="btn btn-secondary" type="button">Cancel</button>
                     </div>
                 </div>
-
-
 
                 <div class="table-scroll-container">
                     <div id="tracker-table" class="tracker-table">
@@ -156,16 +152,14 @@
         <div class="modal-content">
             <h3>Move to Group</h3>
             <div class="form-group">
-            <label for="group-select">Select a group to move combatant(s) to:</label>
-            <select id="group-select"></select>
+                <label for="group-select">Select a group to move combatant(s) to:</label>
+                <select id="group-select"></select>
             </div>
             <div class="modal-actions">
-            <button id="cancel-move-btn" class="btn">Cancel</button>
-            <button id="confirm-move-btn" class="btn">Confirm</button>
+                <button id="cancel-move-btn" class="btn" type="button">Cancel</button>
+                <button id="confirm-move-btn" class="btn" type="button">Confirm</button>
             </div>
         </div>
     </div>
-
-
 </body>
 </html>
