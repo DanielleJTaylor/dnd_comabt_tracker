@@ -21,26 +21,33 @@
     <script src="scripts/group-selector.js" defer></script>
     <!-- Other project-specific scripts -->
     <script src="scripts/link-sheet.js" defer></script>
-    <script src="scripts/dashboard.js" defer></script>
+    <script src="scripts/dashboard.js" defer></script>    
+    <script src="scripts/encounter-dashboard.js" defer></script>
 </head>
 <body>
     <!-- Main container for the two-panel layout -->
     <div id="app-container">
 
         <!-- RIGHT: Dashboards panel (Initially hidden) -->
+        <!-- RIGHT: Dashboards panel (resizable, opens on button) -->
         <section id="right-dashboard">
-            <div id="dash-resizer" aria-label="Resize dashboards panel" title="Drag to resize"></div>
+        <div id="dash-resizer" aria-label="Resize dashboards panel" title="Drag to resize"></div>
 
-            <div id="dashboard-header">
-                <h3>📁 Dashboards</h3>
-               <button id="closeDashboardBtn">✖</button>
-            </div>
-            <div class="dashboard-controls">
-                <button id="newDashboardBtn">➕ New Dashboard</button>
-                <button id="newFolderBtn">📁 New Folder</button>
-            </div>
-            <div id="dashboard-list-container" class="dashboard-list"></div>
+        <div id="dashboard-header">
+            <h3>📁 Dashboards</h3>
+            <button id="closeDashboardBtn">✖</button>
+        </div>
+
+        <!-- New: the embedded dashboards frame -->
+        <iframe
+            id="dash-iframe"
+            title="Dashboards"
+            sandbox="allow-same-origin allow-scripts allow-forms allow-downloads"
+            referrerpolicy="no-referrer"
+            style="border:0; width:100%; height:100%; display:block;"
+        ></iframe>
         </section>
+
 
         <!-- LEFT: Main Tracker panel -->
         <section id="left-tracker">
@@ -161,6 +168,8 @@
         </div>
     </div>
 
+<!-- in encounter.html, near the end of body -->
+<div id="drag-shield" aria-hidden="true"></div>
 
 </body>
 </html>
