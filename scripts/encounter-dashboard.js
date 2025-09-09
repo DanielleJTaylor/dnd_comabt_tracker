@@ -14,21 +14,13 @@ document.addEventListener('DOMContentLoaded', () => {
     try { localStorage.setItem(DEFAULT_SRC_KEY, url); } catch {}
   }
 
-  function getLastUrl() {
-    try {
-      const saved = localStorage.getItem(DEFAULT_SRC_KEY);
-      return saved && typeof saved === 'string' ? saved : LIST_URL;
-    } catch { return LIST_URL; }
-  }
-
   // When the user opens the Dashboards sidebar, (re)load list (or last page)
-  openBtn?.addEventListener('click', () => {
-    // app.js already adds `dashboard-visible` and applies saved width:contentReference[oaicite:2]{index=2}
-    // Only set src if the iframe is empty to avoid reloading on every click.
+    openBtn?.addEventListener('click', () => {
     if (iframe && !iframe.getAttribute('src')) {
-      loadInIframe(getLastUrl());
+        iframe.src = 'view-dashboards.html';                   // force list view
+        try { localStorage.setItem('dash_iframe_last_url', 'view-dashboards.html'); } catch {}
     }
-  });
+    });
 
   // Optional: remember wherever the iframe navigates (e.g., clicking a dashboard)
   // Works because links in `view-dashboards.html` are normal anchors to
