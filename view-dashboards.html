@@ -7,18 +7,6 @@
     <!-- Shared CSS for dashboard look and feel -->
     <link rel="stylesheet" href="css/view-dashboards.css">
 </head>
-
-    <!-- NEW: Instant script to detect embed mode -->
-    <script>
-        (function() {
-            try {
-                if (new URLSearchParams(location.search).get('embed') === '1') {
-                    document.documentElement.classList.add('embed');
-                }
-            } catch (e) {}
-        })();
-    </script>
-
 <body>
     <!-- Main container for the dashboard view -->
     <div id="dashboard-viewer">
@@ -53,4 +41,3 @@
     <script src="scripts/view-dashboards.js" defer></script>
 </body>
 </html>
-
