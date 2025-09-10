@@ -1,199 +1,266 @@
-/* scripts/group-selector.js */
-/* UI layer: selection, bulk actions, "choose group" hint, mini confirm bar.
-   NOTE: No HP editing or contextmenu prompt here — HP is handled by hp-popup.js,
-   and inline edits are handled by combat_tracker.js's activateInlineEdit(). */
-
+// scripts/group-selector.js
+// Bulk selection utilities: move to group, delete, and inline damage/heal (replaces hp-popup).
 (() => {
-  const $ = (sel) => document.querySelector(sel);
+  const $  = (s) => document.querySelector(s);
+  const $$ = (s) => Array.from(document.querySelectorAll(s));
 
-  // --- DOM refs ---
-  const combatantListBody = $('#combatant-list-body');
+  // ---- DOM targets (resilient lookups) ----
+  const bulkBar            = $('#bulkActionsBar');
+  const selectionCounterEl = $('#selectionCounter') || (() => {
+    const s = document.createElement('span'); s.id='selectionCounter';
+    bulkBar?.appendChild(s); return s;
+  })();
 
-  const bulkActionsBar    = $('#bulkActionsBar');
-  const selectionCounter  = $('#selectionCounter');
-  const selectAllCheckbox = $('#selectAllCheckbox');
-  const bulkGroupBtn      = $('#bulkGroupBtn');
-  const bulkDeleteBtn     = $('#bulkDeleteBtn');
-  const bulkDamageHealBtn = $('#bulkDamageHealBtn'); // optional
+  let bulkDamageHealBtn = $('#bulkDamageHealBtn');
+  let bulkDeleteBtn     = $('#bulkDeleteBtn');
+  let bulkGroupBtn      = $('#bulkGroupBtn');
 
-  // Hint shown after pressing “Move to Group”
-  const chooseHint        = $('#choose-group-hint');
-
-  // Mini confirm bar (appears after clicking a group row while in choose mode)
-  const miniBar           = $('#confirm-move-mini');
-  const miniText          = $('#confirm-mini-text');
-  const miniYes           = $('#confirm-mini-yes');
-  const miniNo            = $('#confirm-mini-no');
-
-  // --- local UI state ---
-  let chooseMode       = false;  // true after pressing “Move to Group”
-  let pendingGroupId   = null;
-  let pendingGroupName = '';
-
-  // ---------- UI sync ----------
-  function updateBulkBarUI() {
-    if (!window.CombatAPI) return;
-
-    const selected = CombatAPI.getSelectedIds();
-    const count    = selected.size;
-
-    selectionCounter.textContent = `${count} selected`;
-    bulkActionsBar.classList.toggle('visible', count > 0 && !CombatAPI.isLocked());
-
-    // compute total countable combatants (top level + members)
-    const all  = CombatAPI.getAllCombatants();
-    let total  = 0;
-    all.forEach(i => total += i.type === 'combatant' ? 1 : (i.members?.length || 0));
-
-    selectAllCheckbox.checked      = total > 0 && count === total;
-    selectAllCheckbox.indeterminate = count > 0 && count < total;
-
-    // re-mark rows + checkboxes to mirror selection
-    combatantListBody.querySelectorAll('.tracker-table-row').forEach(row => {
-      const id    = row.dataset.id;
-      const isSel = selected.has(id);
-      row.classList.toggle('selected', isSel);
-      const cb = row.querySelector('input[type="checkbox"]');
-      if (cb) cb.checked = isSel;
-    });
-
-    // exit choose mode if selection disappears
-    if (count === 0) {
-      hideChooseHint();
-      hideMiniConfirm();
+  // If your HTML didn't include the three bulk buttons, create them:
+  if (bulkBar && (!bulkDamageHealBtn || !bulkDeleteBtn || !bulkGroupBtn)) {
+    const actions = bulkBar.querySelector('.bulk-actions-actions') || (() => {
+      const d = document.createElement('div'); d.className='bulk-actions-actions'; bulkBar.appendChild(d); return d;
+    })();
+    if (!bulkDamageHealBtn) {
+      bulkDamageHealBtn = document.createElement('button');
+      bulkDamageHealBtn.id = 'bulkDamageHealBtn';
+      bulkDamageHealBtn.textContent = 'Damage / Heal';
+      actions.appendChild(bulkDamageHealBtn);
+    }
+    if (!bulkDeleteBtn) {
+      bulkDeleteBtn = document.createElement('button');
+      bulkDeleteBtn.id = 'bulkDeleteBtn';
+      bulkDeleteBtn.textContent = 'Delete Selected';
+      actions.appendChild(bulkDeleteBtn);
+    }
+    if (!bulkGroupBtn) {
+      bulkGroupBtn = document.createElement('button');
+      bulkGroupBtn.id = 'bulkGroupBtn';
+      bulkGroupBtn.textContent = 'Move to Group';
+      actions.appendChild(bulkGroupBtn);
     }
   }
 
-  // ---------- Hint helpers ----------
-  function showChooseHint() { chooseMode = true;  chooseHint?.classList.remove('hidden'); }
-  function hideChooseHint() { chooseMode = false; chooseHint?.classList.add('hidden'); }
+  // Hint + confirm for "move to group" (optional elements in HTML)
+  const chooseGroupHint  = $('#choose-group-hint');
+  const confirmMoveMini  = $('#confirm-move-mini');
+  const confirmMiniText  = $('#confirm-mini-text');
+  const confirmMiniYes   = $('#confirm-mini-yes');
+  const confirmMiniNo    = $('#confirm-mini-no');
 
-  // ---------- Mini confirm helpers ----------
-  function showMiniConfirm(groupId, groupName) {
-    pendingGroupId   = groupId;
-    pendingGroupName = groupName || 'this group';
-
-    const count = CombatAPI.getSelectedIds()?.size || 0;
-    if (miniText) miniText.textContent = `Move ${count} selected to “${pendingGroupName}”?`;
-
-    miniBar?.classList.remove('hidden');
-    miniBar?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  // ---- Inline Damage/Heal mini-panel (below bulk bar, like move confirmation) ----
+  let bulkHpMini = $('#bulk-hp-mini');
+  if (!bulkHpMini && bulkBar?.parentNode) {
+    bulkHpMini = document.createElement('div');
+    bulkHpMini.id = 'bulk-hp-mini';
+    bulkHpMini.className = 'confirm-mini hidden';
+    bulkHpMini.innerHTML = `
+      <span id="bulk-hp-mini-title" style="font-weight:600;">Apply Damage / Heal to selected</span>
+      <div class="form-row" style="display:flex;gap:.5rem;align-items:center;">
+        <label for="bulkDamageInp" style="white-space:nowrap;">Damage:</label>
+        <input id="bulkDamageInp" type="number" step="1" inputmode="numeric" style="width:7rem;padding:.25rem .4rem;">
+        <label for="bulkHealInp" style="white-space:nowrap;">Heal:</label>
+        <input id="bulkHealInp" type="number" step="1" inputmode="numeric" style="width:7rem;padding:.25rem .4rem;">
+      </div>
+      <div class="confirm-mini-actions">
+        <button id="bulkHpApplyBtn" class="btn">Apply</button>
+        <button id="bulkHpCancelBtn" class="btn btn-secondary">Cancel</button>
+      </div>
+    `;
+    bulkBar.parentNode.insertBefore(bulkHpMini, bulkBar.nextSibling);
   }
-  function hideMiniConfirm() {
-    miniBar?.classList.add('hidden');
-    pendingGroupId   = null;
-    pendingGroupName = '';
+  const bulkDamageInp  = $('#bulkDamageInp');
+  const bulkHealInp    = $('#bulkHealInp');
+  const bulkHpApplyBtn = $('#bulkHpApplyBtn');
+  const bulkHpCancelBtn= $('#bulkHpCancelBtn');
+
+  // ---- Helpers ----
+  function show(el) { el?.classList?.remove('hidden'); }
+  function hide(el) { el?.classList?.add('hidden'); }
+
+  function getSelectedIds() { return window.CombatState?.getSelectedIds?.() || new Set(); }
+
+  function countSelected() { return getSelectedIds().size; }
+
+  function updateBulkBarVisibility(snapshot) {
+    const n = countSelected();
+    if (!bulkBar) return;
+    if (n > 0) {
+      bulkBar.classList.add('visible');
+      selectionCounterEl.textContent = `${n} selected`;
+    } else {
+      bulkBar.classList.remove('visible');
+      selectionCounterEl.textContent = `0 selected`;
+      // Close any open inline panels
+      hide(chooseGroupHint);
+      hide(confirmMoveMini);
+      hide(bulkHpMini);
+    }
   }
 
-  // ---------- Events ----------
-
-  // “Move to Group” → enter choose mode
-  bulkGroupBtn?.addEventListener('click', () => {
-    if (!window.CombatAPI || CombatAPI.isLocked()) return;
-
-    if (CombatAPI.getSelectedIds().size === 0) {
-      // nudge user if nothing is selected
-      selectionCounter.classList.add('flash');
-      setTimeout(() => selectionCounter.classList.remove('flash'), 600);
-      return;
-    }
-
-    hideMiniConfirm(); // clear any previous confirm
-    showChooseHint();
-  });
-
-  // Per-row interactions (checkboxes + group row pick)
-  combatantListBody?.addEventListener('click', (e) => {
-    if (!window.CombatAPI || CombatAPI.isLocked()) return;
-
-    // 1) checkbox toggles selection
-    const cb = e.target.closest('input[type="checkbox"]');
-    if (cb) {
-      const id = cb.dataset.id;
-      const selected = CombatAPI.getSelectedIds();
-      cb.checked ? selected.add(id) : selected.delete(id);
-      CombatAPI.setSelectedIds(selected);
-      updateBulkBarUI();
-      return;
-    }
-
-    // 2) group-row click (only works while in choose mode and with a non-empty selection)
-    const gRow = e.target.closest('.group-row');
-    if (gRow && chooseMode && CombatAPI.getSelectedIds().size > 0) {
-      const groups = CombatAPI.getAllGroups?.() || [];
-      const g = groups.find(x => x.id === gRow.dataset.id);
-      if (g) showMiniConfirm(g.id, g.name);
-    }
-  });
-
-  // Mini confirm buttons
-  miniYes?.addEventListener('click', () => {
-    if (!pendingGroupId) return;
-    CombatAPI.moveSelectedToGroup(pendingGroupId);
-    CombatAPI.render?.();
-    hideMiniConfirm();
-    hideChooseHint();
-    updateBulkBarUI();
-  });
-
-  miniNo?.addEventListener('click', () => {
-    // stay in choose mode so user can click a different group
-    hideMiniConfirm();
-  });
-
-  // Delete selected
-  bulkDeleteBtn?.addEventListener('click', () => {
-    if (!window.CombatAPI) return;
-    if (CombatAPI.getSelectedIds().size > 0) {
-      CombatAPI.deleteSelected();
-      CombatAPI.render?.();
-      hideMiniConfirm();
-      hideChooseHint();
-      updateBulkBarUI();
-    }
-  });
-
-  // Optional bulk Damage/Heal launcher (kept if you want it; otherwise remove this block)
-  // It does NOT show a mini editor; you can later wire this to your hp-popup if desired.
-  bulkDamageHealBtn?.addEventListener('click', () => {
-    if (!window.CombatAPI || CombatAPI.isLocked()) return;
-    const ids = CombatAPI.getSelectedIds?.();
-    const count = ids?.size || 0;
-    if (!count) {
-      selectionCounter?.classList.add('flash');
-      setTimeout(() => selectionCounter?.classList.remove('flash'), 600);
-      return;
-    }
-    // You can open your popup in "bulk" mode later. For now, do nothing or prompt.
-    // Intentionally left minimal per request.
-  });
-
-  // Select all
-  selectAllCheckbox?.addEventListener('change', () => {
-    if (!window.CombatAPI || CombatAPI.isLocked()) return;
-
-    const ids = new Set();
-    if (selectAllCheckbox.checked) {
-      CombatAPI.getAllCombatants().forEach(i => {
-        if (i.type === 'combatant') ids.add(i.id);
-        else (i.members || []).forEach(m => ids.add(m.id));
+  function toast(msg, ms = 1200) {
+    let el = document.getElementById('tracker-toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'tracker-toast';
+      Object.assign(el.style, {
+        position:'fixed', bottom:'16px', right:'16px',
+        background:'#222', color:'#fff', padding:'8px 12px',
+        borderRadius:'8px', boxShadow:'0 8px 24px rgba(0,0,0,.2)',
+        zIndex:99999, opacity:0, transition:'opacity .15s'
       });
+      document.body.appendChild(el);
     }
-    CombatAPI.setSelectedIds(ids);
-    updateBulkBarUI();
+    el.textContent = msg;
+    el.style.opacity = 1;
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => { el.style.opacity = 0; }, ms);
+  }
+
+  // ---- Damage/Heal application logic (temp HP first, then HP; heal to max) ----
+  function applyDamageHealTo(id, damage, heal) {
+    const snap = window.CombatState.getSnapshot();
+    // find combatant by id
+    const all = [];
+    snap.combatants.forEach(it => {
+      if (it.type === 'combatant') all.push(it);
+      else (it.members || []).forEach(m => all.push(m));
+    });
+    const c = all.find(x => x.id === id);
+    if (!c) return;
+
+    let hp     = Number(c.hp)     || 0;
+    let maxHp  = Number(c.maxHp)  || 0;
+    let tempHp = Number(c.tempHp) || 0;
+
+    if (damage > 0) {
+      // remove temp first
+      const tUse = Math.min(tempHp, damage);
+      tempHp -= tUse;
+      let remaining = damage - tUse;
+      if (remaining > 0) hp = Math.max(0, hp - remaining);
+    }
+    if (heal > 0) {
+      hp = Math.min(maxHp, hp + heal);
+    }
+
+    window.CombatState.updateCombatant(id, { hp, tempHp });
+  }
+
+  function applyBulkDamageHeal() {
+    const dmg = Math.max(0, parseInt(bulkDamageInp?.value || '0', 10) || 0);
+    const heal= Math.max(0, parseInt(bulkHealInp?.value || '0', 10) || 0);
+    if (dmg === 0 && heal === 0) { toast('Enter damage and/or heal'); return; }
+
+    const sel = getSelectedIds();
+    if (sel.size === 0) return;
+
+    sel.forEach(id => applyDamageHealTo(id, dmg, heal));
+    toast('Applied to selected');
+
+    // reset + hide
+    if (bulkDamageInp) bulkDamageInp.value = '';
+    if (bulkHealInp) bulkHealInp.value = '';
+    hide(bulkHpMini);
+  }
+
+  // ---- Move-to-group flow ----
+  let awaitingGroupPick = false;
+  let pendingTargetGroup = null;
+
+  function beginMoveToGroup() {
+    if (countSelected() === 0) { toast('Select some combatants first'); return; }
+    awaitingGroupPick = true;
+    pendingTargetGroup = null;
+    show(chooseGroupHint);
+    hide(confirmMoveMini);
+    toast('Click a group row to choose destination');
+  }
+
+  function endMoveFlow() {
+    awaitingGroupPick = false;
+    pendingTargetGroup = null;
+    hide(chooseGroupHint);
+    hide(confirmMoveMini);
+  }
+
+  function onGroupRowClicked(groupRow) {
+    if (!awaitingGroupPick) return;
+    const groupId = groupRow?.dataset?.id;
+    if (!groupId) return;
+
+    // Find group name
+    const snap = window.CombatState.getSnapshot();
+    const g = snap.combatants.find(x => x.type === 'group' && x.id === groupId);
+    const groupName = g?.name || 'Group';
+
+    pendingTargetGroup = groupId;
+    const n = countSelected();
+    if (confirmMiniText) confirmMiniText.textContent = `Move ${n} selected to “${groupName}”?`;
+    hide(chooseGroupHint);
+    show(confirmMoveMini);
+  }
+
+  // ---- Delete flow ----
+  function bulkDelete() {
+    const n = countSelected();
+    if (!n) return;
+    if (!confirm(`Delete ${n} selected combatant(s)?`)) return;
+    window.CombatState.deleteSelected();
+    toast('Deleted selected');
+  }
+
+  // ---- Wire UI ----
+  bulkDamageHealBtn?.addEventListener('click', () => {
+    if (countSelected() === 0) { toast('Select some combatants first'); return; }
+    // Toggle panel
+    if (bulkHpMini?.classList.contains('hidden')) show(bulkHpMini); else hide(bulkHpMini);
+    hide(chooseGroupHint);
+    hide(confirmMoveMini);
+  });
+  bulkHpApplyBtn?.addEventListener('click', applyBulkDamageHeal);
+  bulkHpCancelBtn?.addEventListener('click', () => hide(bulkHpMini));
+
+  bulkGroupBtn?.addEventListener('click', beginMoveToGroup);
+  bulkDeleteBtn?.addEventListener('click', bulkDelete);
+
+  // Confirm mini buttons (for move)
+  confirmMiniYes?.addEventListener('click', () => {
+    if (!pendingTargetGroup) return;
+    window.CombatState.moveSelectedToGroup(pendingTargetGroup);
+    endMoveFlow();
+    toast('Moved to group');
+  });
+  confirmMiniNo?.addEventListener('click', endMoveFlow);
+
+  // Capture clicks on group header rows while in move mode
+  document.addEventListener('click', (e) => {
+    if (!awaitingGroupPick) return;
+    const groupRow = e.target.closest('.group-row');
+    if (groupRow) {
+      e.preventDefault();
+      onGroupRowClicked(groupRow);
+    }
+  }, true);
+
+  // Update bulk bar whenever state changes
+  window.CombatState?.subscribe((snapshot) => {
+    updateBulkBarVisibility(snapshot);
   });
 
-  // Close mini confirm on ESC
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !miniBar?.classList.contains('hidden')) {
-      hideMiniConfirm();
-    }
-  });
+  // Initial state
+  updateBulkBarVisibility(window.CombatState?.getSnapshot?.() || {});
 
-  // Re-sync UI after data layer re-renders
-  window.addEventListener('tracker:render', updateBulkBarUI);
-
-  // Initial paint sync
-  if (document.readyState !== 'loading') updateBulkBarUI();
-  else window.addEventListener('DOMContentLoaded', updateBulkBarUI);
+  // ---- Minimal styles for the new panel (optional, inlined to avoid CSS file edits) ----
+  (function injectMiniStyles(){
+    const id = 'bulk-hp-mini-inline-style';
+    if (document.getElementById(id)) return;
+    const st = document.createElement('style');
+    st.id = id;
+    st.textContent = `
+      #bulk-hp-mini.confirm-mini { display:flex; align-items:center; gap:.75rem; }
+      #bulk-hp-mini.hidden { display:none; }
+      #bulk-hp-mini .form-row input { border:1px solid #bbb; border-radius:4px; }
+    `;
+    document.head.appendChild(st);
+  })();
 })();

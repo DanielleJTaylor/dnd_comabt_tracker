@@ -2,7 +2,7 @@
 
 /* The scroll wrapper MUST own the overflow and be allowed to shrink */
 .table-scroll-container {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-width: 0;            /* critical: allow shrinking in a grid/flex parent */
   height: 100%;
   overflow-x: auto;         /* horizontal scroll when narrow */
@@ -127,9 +127,6 @@
 .group-row .actions-cell,.group-row .dashboard-link-cell{ justify-content:center; }
 .group-row .name-cell{ justify-content:flex-start; }
 
-/* Group members share lighter background */
-#combatant-list-body > .tracker-table-row.in-group{ background:var(--group-member-bg) !important; }
-#combatant-list-body > .tracker-table-row.in-group:hover{ background:var(--group-member-bg-hover) !important; }
 
 /* Indentation for members */
 .tracker-table-row.in-group .select-cell{ visibility:hidden; }
@@ -218,3 +215,18 @@
   opacity: .35;
   text-decoration: line-through;
 }
+
+
+
+/* Make the combat table area 95% of the page width */
+.table-scroll-container {
+  width: 95%;
+  margin: 0 auto;   /* center it */
+}
+
+/* Keep the grid wide enough to scroll when needed */
+#tracker-table {
+  width: auto;      /* or omit */
+  min-width: 1150px;
+}
+

@@ -17,12 +17,21 @@
     <script src="scripts/app.js" defer></script>
     <script src="scripts/history-log.js" defer></script>
     <!-- The two core scripts for the tracker functionality -->
-    <script src="scripts/conditions_catalog.js" defer></script>
+    <!-- MUST be before the other combat scripts -->
     <script src="scripts/encounters-store.js"></script>
-    <script src="scripts/combat_tracker.js" defer></script>
+    <script src="scripts/conditions_catalog.js" defer></script>
+
+    <!-- The split files -->
+    <script src="scripts/combat_state.js" defer></script>
+    <script src="scripts/combat-persist.js" defer></script>
+    <script src="scripts/combat-render.js" defer></script>
+    <script src="scripts/combat-bootstrap.js" defer></script>
+    <script src="scripts/combat-share.js" defer></script>
+
+
     <script src="scripts/group-selector.js" defer></script>
-    <!-- Other project-specific scripts -->
     <script src="scripts/hp-popup.js" defer></script>
+    <!-- …other scripts… -->
     <script src="scripts/link-sheet.js" defer></script>
     <script src="scripts/dashboard.js" defer></script>    
     <script src="scripts/encounter-dashboard.js" defer></script>
@@ -59,7 +68,7 @@
                 <div class="header-left-group">
                     <button id="encounterBackBtn" class="back-btn">⬅ Back</button>
                     <h1>🧝‍♂️ D&D Combat Tracker</h1>
-                    <a href="view-encounters.html" class="btn" id="viewEncountersBtn">🧭 <span class="label">View Encounters</span></a>
+                   
                 </div>
                 <div class="header-right-controls">
                     <label class="theme-switch">
@@ -77,6 +86,7 @@
             <main class="tracker-wrapper">
                 <div class="controls-row">
                     <button id="lockGroupSelectionBtn" class="btn">🔒 <span class="label">Lock Groups</span></button>
+                    <button class="btn">🗑️ <span class="label">Clear</span></button>
                     <button id="historyLogBtn" class="btn">📜 <span class="label">History</span></button>
                     <span id="roundCounter">Round: 1</span>
                     <button id="prevTurnBtn" class="btn">⬅ <span class="label">Prev Turn</span></button>
@@ -85,7 +95,7 @@
                     <!-- in encounter.html, controls-row -->
                     <button id="saveEncounterBtn" class="btn">💾 <span class="label">Save</span></button>
                     <button id="loadEncounterBtn" class="btn">📂 <span class="label">Load</span></button>
-                    <button class="btn">🗑️ <span class="label">Clear</span></button>
+                    <button id="exportInitBtn" class="btn">🧾 <span class="label">Copy</span></button>
                     <button id="seeDashboardsBtn" class="btn">📋 <span class="label">Dashboards</span></button>
                 </div>
 
@@ -145,32 +155,7 @@
         <div id="historyLogContent" class="log-content"></div> 
     </section>
     
-    <!-- HP Adjustment Popup -->
-    <!-- HP Adjustment Popup -->
-    <div id="hpPopup" class="popup hidden" aria-hidden="true">
-    <div class="popup-content" role="dialog" aria-modal="true" aria-labelledby="hpPopupTitle">
-        <h3 id="hpPopupTitle">Adjust HP</h3>
 
-        <div id="hpPopupTarget" style="margin-bottom:.5rem; opacity:.85; font-size:.9rem;"></div>
-
-        <!-- One row, two boxes -->
-        <div class="form-row" style="display:flex; gap:.75rem; align-items:center; margin:.5rem 0;">
-        <label for="hpDamage" style="white-space:nowrap;">Damage:</label>
-        <input id="hpDamage" type="number" step="1" inputmode="numeric" style="width:7rem; padding:.25rem .4rem;">
-        <label for="hpHeal" style="white-space:nowrap; margin-left:.5rem;">Heal:</label>
-        <input id="hpHeal" type="number" step="1" inputmode="numeric" style="width:7rem; padding:.25rem .4rem;">
-        </div>
-
-        <div class="hint" style="font-size:.85rem; opacity:.8; margin-bottom:.75rem;">
-        Damage removes <strong>Temp HP</strong> first, then Current HP. Heal restores Current HP up to Max.
-        </div>
-
-        <div class="actions" style="display:flex; gap:.5rem; justify-content:flex-end;">
-        <button id="hpCancelBtn" class="btn btn-secondary">Cancel</button>
-        <button id="hpApplyBtn" class="btn">Apply</button>
-        </div>
-    </div>
-    </div>
 
 
 

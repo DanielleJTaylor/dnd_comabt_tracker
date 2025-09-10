@@ -1,4 +1,4 @@
-// scripts/combat_tracker.js
+/* // scripts/combat_tracker.js
 (() => {
   // ======= STATE =======
   let combatants = [];                 // mix: {type:'combatant'} and {type:'group', members:[]}
@@ -20,10 +20,9 @@
   const sortAscBtn            = $('#sort-init-asc');
   const sortDescBtn           = $('#sort-init-desc');
 
-  // Save / Load buttons (prefer IDs; fallback to positional query if needed)
-    const saveBtn = document.getElementById('saveEncounterBtn');
-    const loadBtn = document.getElementById('loadEncounterBtn');
-
+  // Save / Load buttons (prefer IDs)
+  const saveBtn = document.getElementById('saveEncounterBtn');
+  const loadBtn = document.getElementById('loadEncounterBtn');
 
   // Current encounter meta (id/name)
   let encounterId = null;
@@ -31,7 +30,7 @@
   let _autosaveTimer = null;
   const AUTOSAVE_MS = 800; // debounce
 
-  // Round/turn controls (make sure these IDs exist in HTML if you want clickable buttons)
+  // Round/turn controls
   const roundCounterEl        = $('#roundCounter');
   const currentTurnEl         = $('#currentTurnDisplay');
   const prevTurnBtn           = $('#prevTurnBtn');
@@ -40,34 +39,53 @@
   // ======= HELPERS =======
   const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
+  // --- Palette: up to 9 team colors (base for group row, member is lighter) ---
+  // Order: red, orange, yellow, green, blue, pink, purple, brown, gray
+  const GROUP_COLORS = [
+    { base: '#f28b82', member: '#fde8e6', text: '#222' }, // red
+    { base: '#fbbc04', member: '#fff3c4', text: '#222' }, // orange
+    { base: '#fff176', member: '#fffbd1', text: '#222' }, // yellow
+    { base: '#81c995', member: '#e7f5ea', text: '#222' }, // green
+    { base: '#aecbfa', member: '#e8f0fe', text: '#222' }, // blue
+    { base: '#f8bbd0', member: '#fde7f3', text: '#222' }, // pink
+    { base: '#d7aefb', member: '#f3e8fd', text: '#222' }, // purple
+    { base: '#d7b899', member: '#fbefe4', text: '#222' }, // brown (light tan)
+    { base: '#e0e0e0', member: '#f5f5f5', text: '#222' }  // gray
+  ];
+  let _nextColorIdx = 0;
 
-    // --- Robust wiring for Save/Load buttons ---
-    (function wireSaveLoadButtons() {
-        const sb = document.getElementById('saveEncounterBtn');
-        const lb = document.getElementById('loadEncounterBtn');
+  // Ensure an existing group has a color index (migration-safe)
+  function ensureGroupColorIdx(g) {
+    if (typeof g.colorIdx === 'number') return g.colorIdx;
+    const idx = _nextColorIdx % GROUP_COLORS.length;
+    _nextColorIdx++;
+    g.colorIdx = idx;
+    return idx;
+  }
 
-        if (sb) {
-            sb.addEventListener('click', (e) => { e.preventDefault(); saveEncounter(true); toast('Saved encounter'); });
-        } else {
-            console.warn('[tracker] saveEncounterBtn not found; enabling delegated listener');
-        }
-
-        if (lb) {
-            lb.addEventListener('click', (e) => { e.preventDefault(); loadEncounter(); });
-        } else {
-            console.warn('[tracker] loadEncounterBtn not found; enabling delegated listener');
-        }
-
-        // Delegated fallback (covers clicks on inner <span> or if DOM changes later)
-        document.addEventListener('click', (e) => {
-            const saveHit = e.target.closest('#saveEncounterBtn');
-            if (saveHit) { e.preventDefault(); saveEncounter(true); toast('Saved encounter'); return; }
-            const loadHit = e.target.closest('#loadEncounterBtn');
-            if (loadHit) { e.preventDefault(); loadEncounter(); return; }
-        }, true);
-    })();
-
-
+  // --- Robust wiring for Save/Load buttons (and delegated fallback) ---
+  (function wireSaveLoadButtons() {
+    if (saveBtn) {
+      saveBtn.addEventListener('click', (e) => {
+        e.preventDefault(); saveEncounter(true); toast('Saved encounter');
+      });
+    } else {
+      console.warn('[tracker] saveEncounterBtn not found');
+    }
+    if (loadBtn) {
+      loadBtn.addEventListener('click', (e) => {
+        e.preventDefault(); loadEncounter();
+      });
+    } else {
+      console.warn('[tracker] loadEncounterBtn not found');
+    }
+    document.addEventListener('click', (e) => {
+      const saveHit = e.target.closest('#saveEncounterBtn');
+      if (saveHit) { e.preventDefault(); saveEncounter(true); toast('Saved encounter'); }
+      const loadHit = e.target.closest('#loadEncounterBtn');
+      if (loadHit) { e.preventDefault(); loadEncounter(); }
+    }, true);
+  })();
 
   // --- robust inline editor commit helpers ---
   function commitInlineEditor(inputEl) {
@@ -77,7 +95,7 @@
     const id      = inputEl.dataset.id;
     const field   = inputEl.dataset.field;    // 'name' | 'init' | 'ac' | 'tempHp' | 'hp' | 'maxHp'
     const intOnly = inputEl.dataset.intOnly === 'true';
-    const spanEl  = inputEl._origSpan;        // original <span> badge
+    const spanEl  = inputEl._origSpan;
     if (!spanEl) return;
 
     let val = String(inputEl.value ?? '').trim();
@@ -97,11 +115,9 @@
       val = parsed;
     }
 
-    // 1) Update the badge immediately so it snaps back from the white input
     spanEl.textContent = String(val);
     inputEl.replaceWith(spanEl);
 
-    // 2) Then update state (which will re-render)
     if (type === 'combatant') {
       updateCombatant(id, { [field]: val });
     } else if (type === 'group') {
@@ -115,45 +131,37 @@
 
   // ======= PERSISTENCE =======
   function getSerializableState() {
-    // Include everything you want persisted
     return {
       version: 1,
-      combatants,                   // groups + members + conditions
+      combatants,
       currentRound,
       turnPtr,
-      // add more if you later need: theme, history, etc.
     };
   }
 
   function applyState(s) {
-    // Defensive defaults
     combatants    = Array.isArray(s?.combatants) ? s.combatants : [];
     currentRound  = Number.isFinite(s?.currentRound) ? s.currentRound : 1;
     turnPtr       = Number.isFinite(s?.turnPtr) ? s.turnPtr : 0;
     render();
   }
 
-  
-    function saveEncounter(manual = false) {
-        if (!window.EncounterStore) { showError('EncounterStore not loaded.'); return; }
+  function saveEncounter(manual = false) {
+    if (!window.EncounterStore) { showError('EncounterStore not loaded.'); return; }
 
-        if (manual && (!encounterId || !encounterName)) {
-            const n = prompt('Encounter name:', encounterName || 'Encounter');
-            if (n && n.trim()) encounterName = n.trim();
-        }
-
-        encounterId = window.EncounterStore.save({
-            id: encounterId,
-            name: encounterName,
-            state: getSerializableState()
-        });
-
-        // Ensure “Open last encounter” works and the view page lists it
-        window.EncounterStore.setLastId(encounterId);
-
-        if (manual) toast('Saved encounter');
+    if (manual && (!encounterId || !encounterName)) {
+      const n = prompt('Encounter name:', encounterName || 'Encounter');
+      if (n && n.trim()) encounterName = n.trim();
     }
 
+    encounterId = window.EncounterStore.save({
+      id: encounterId,
+      name: encounterName,
+      state: getSerializableState()
+    });
+    window.EncounterStore.setLastId(encounterId);
+    if (manual) toast('Saved encounter');
+  }
 
   function scheduleAutosave() {
     if (!window.EncounterStore) return;
@@ -163,7 +171,6 @@
 
   function loadEncounter() {
     if (!window.EncounterStore) return;
-    // Simple prompt-based loader
     const list = window.EncounterStore.list();
     if (!list.length) { alert('No saved encounters yet.'); return; }
 
@@ -217,7 +224,7 @@
     for (const item of combatants) {
       if (item.type === 'combatant') cb(item);
       if (item.type === 'group') {
-        cb(item); // groups share same namespace
+        cb(item);
         (item.members || []).forEach(cb);
       }
     }
@@ -263,7 +270,9 @@
   // Groups have their own init used for top-level sorting
   function addGroupByName(name) {
     const safe = generateUniqueName(name || 'New Group');
-    const group = { id: uid(), type: 'group', name: safe, init: undefined, members: [] };
+    const colorIdx = _nextColorIdx % GROUP_COLORS.length;
+    _nextColorIdx++;
+    const group = { id: uid(), type: 'group', name: safe, init: undefined, members: [], colorIdx };
     combatants.push(group);
     return group;
   }
@@ -280,7 +289,6 @@
   }
 
   // ======= ROUND / TURN LOGIC =======
-  // Build the current "turn order" as an array of combatant IDs only (skip groups).
   function getTurnOrderIds() {
     const ids = [];
     combatants.forEach(item => {
@@ -290,7 +298,6 @@
     return ids;
   }
 
-  // Keep pointer valid if list changes
   function clampTurnPtr() {
     const order = getTurnOrderIds();
     if (order.length === 0) { turnPtr = 0; return; }
@@ -320,7 +327,7 @@
     turnPtr++;
     if (turnPtr >= order.length) {
       turnPtr = 0;
-      currentRound += 1; // end of list → advance round
+      currentRound += 1;
       setRoundDisplay();
     }
     render();
@@ -333,7 +340,7 @@
     turnPtr--;
     if (turnPtr < 0) {
       turnPtr = Math.max(0, order.length - 1);
-      if (currentRound > 1) currentRound -= 1; // wrap backward → go back a round (min 1)
+      if (currentRound > 1) currentRound -= 1;
       setRoundDisplay();
     }
     render();
@@ -362,7 +369,6 @@
   }
 
   // ======= CONDITIONS (5e) =======
-  // (Names come from window.ConditionsCatalog.list; this is just a fallback)
   const CONDITION_LIST = [
     'Blinded','Charmed','Deafened','Frightened','Grappled','Incapacitated',
     'Invisible','Paralyzed','Petrified','Poisoned','Prone','Restrained',
@@ -374,7 +380,6 @@
     return c.conditions;
   }
 
-  // Active if round in [startRound, endRound] inclusive
   function isConditionActive(cond, round) {
     return round >= cond.startRound && round <= cond.endRound;
   }
@@ -388,7 +393,7 @@
       name: String(name || '').trim() || 'Condition',
       note: String(note || ''),
       startRound: currentRound,
-      endRound: currentRound + dur - 1// inclusive
+      endRound: currentRound + dur - 1 // inclusive
     };
     ensureConditionsArray(item).push(cond);
     render();
@@ -407,14 +412,20 @@
     combatantListBody.innerHTML = '';
 
     const turnOrder = getTurnOrderIds();
-    clampTurnPtr(); // keep pointer valid
+    clampTurnPtr();
     const currentId = turnOrder[turnPtr] || null;
 
     const renderGroupRow = (g) => {
+      const idx = ensureGroupColorIdx(g);
+      const scheme = GROUP_COLORS[idx % GROUP_COLORS.length];
+
       const row = document.createElement('div');
       row.className = 'group-row';
       row.dataset.id = g.id;
       row.dataset.type = 'group';
+      row.style.backgroundColor = scheme.base;
+      row.style.color = scheme.text;
+
       row.innerHTML = `
         <div class="cell select-cell"></div>
         <div class="cell image-cell">
@@ -456,13 +467,23 @@
       return `<div class="cond-list">${chips}</div>`;
     }
 
-    const renderCombatantRow = (c, isInGroup = false) => {
+    const renderCombatantRow = (c, isInGroup = false, groupForColor = null) => {
       const isSelected = selectedCombatantIds.has(c.id);
-      const isCurrent  = currentId === c.id; // highlight only combatants
+      const isCurrent  = currentId === c.id;
+
       const row = document.createElement('div');
       row.className = `tracker-table-row ${isInGroup ? 'in-group' : ''} ${isSelected ? 'selected' : ''} ${isCurrent ? 'current-turn' : ''}`;
       row.dataset.id = c.id;
       row.dataset.type = 'combatant';
+
+      // Apply lighter tint for members under a colored group
+      if (isInGroup && groupForColor) {
+        const idx = ensureGroupColorIdx(groupForColor);
+        const scheme = GROUP_COLORS[idx % GROUP_COLORS.length];
+        row.style.backgroundColor = scheme.member;
+        row.style.color = scheme.text;
+      }
+
       row.innerHTML = `
         <div class="cell select-cell">
           <input type="checkbox" class="combatant-checkbox" data-id="${c.id}" ${isSelected ? 'checked' : ''}>
@@ -511,10 +532,9 @@
     combatants.forEach(item => {
       if (item.type === 'group') {
         renderGroupRow(item);
-        // do NOT sort members here; preserve insertion order while in group
-        item.members.forEach(m => renderCombatantRow(m, true));
+        (item.members || []).forEach(m => renderCombatantRow(m, true, item)); // pass group for color
       } else {
-        renderCombatantRow(item, false);
+        renderCombatantRow(item, false, null);
       }
     });
 
@@ -550,7 +570,6 @@
 
   function removeSelectedEverywhereCollect() {
     const collected = [];
-    // remove selected top-level combatants
     combatants = combatants.filter(item => {
       if (item.type === 'combatant' && selectedCombatantIds.has(item.id)) {
         collected.push(item);
@@ -558,7 +577,6 @@
       }
       return true;
     });
-    // remove selected from any groups
     combatants.forEach(group => {
       if (group.type === 'group') {
         group.members = group.members.filter(m => {
@@ -581,7 +599,7 @@
     const moving = removeSelectedEverywhereCollect();
     if (moving.length === 0) return false;
 
-    targetGroup.members.push(...moving); // keep insertion order inside group
+    targetGroup.members.push(...moving);
     selectedCombatantIds.clear();
     render();
     return true;
@@ -646,7 +664,6 @@
         return false;
       }
     }
-    // ensure numeric init becomes a number
     if ('init' in patch && patch.init !== undefined) {
       const p = Number(patch.init);
       patch.init = Number.isFinite(p) ? p : undefined;
@@ -659,7 +676,7 @@
   // ===== Sorting helpers (name-aware tie-breaking) =====
   function splitNameForSort(name) {
     const trimmed = String(name || '').trim();
-    const m = trimmed.match(/^(.*?)(?:\s+(\d+))?$/); // base [num]
+    const m = trimmed.match(/^(.*?)(?:\s+(\d+))?$/);
     const base = (m?.[1] || '').toLowerCase();
     const num = m?.[2] ? parseInt(m[2], 10) : null;
     return { base, num };
@@ -678,7 +695,6 @@
     return String(aName || '').localeCompare(String(bName || ''));
   }
 
-  // Sort top-level (groups + ungrouped combatants) by INIT with tie-breaks
   function sortByInit(direction = 'desc') {
     flushPendingEdits();
     const dir = direction === 'asc' ? 'asc' : 'desc';
@@ -690,7 +706,6 @@
     };
     const getName = (item) => (item.name || '');
 
-    // Remember the current combatant to keep pointer stable after sort
     const currentOrderBefore = getTurnOrderIds();
     const curId = currentOrderBefore[turnPtr];
 
@@ -710,15 +725,13 @@
     }
   }
 
-  // ======= PUBLIC API (used by group-selector.js & hp-popup.js) =======
+  // ======= PUBLIC API =======
   window.CombatAPI = {
-    // data
     getAllCombatants: () => combatants,
     allGroups,
     getAllGroups: () => allGroups(),
     addGroupByName,
 
-    // selection
     getSelectedIds: () => new Set(selectedCombatantIds),
     setSelectedIds: (ids) => {
       selectedCombatantIds = new Set(ids);
@@ -731,24 +744,20 @@
       dispatchRenderEvent();
     },
 
-    // actions
     moveSelectedToGroup,
     ungroupSelected,
     deleteSelected,
     render,
     isLocked: () => isLocked,
 
-    // utility
     addCombatant: addDefaultCombatant,
     addGroup: createEmptyGroup,
     sortByInit,
 
-    // round/turn access
     getCurrentRound: () => currentRound,
     getCurrentTurnId: () => getTurnOrderIds()[turnPtr] || null,
     nextTurn, prevTurn,
 
-    // conditions
     addConditionToCombatant,
     removeCondition,
   };
@@ -757,25 +766,15 @@
   addCombatantBtn?.addEventListener('click', addDefaultCombatant);
   addGroupBtn?.addEventListener('click', createEmptyGroup);
   lockGroupSelectionBtn?.addEventListener('click', () => {
-    isLocked = !isLocked;
-    updateLockUI();
+    isLocked = !isLocked; updateLockUI();
   });
 
-  // Init sort buttons (DESC = down, ASC = up)
-  sortAscBtn?.addEventListener('click', () => {
-    flushPendingEdits();
-    CombatAPI.sortByInit('asc');
-  });
-  sortDescBtn?.addEventListener('click', () => {
-    flushPendingEdits();
-    CombatAPI.sortByInit('desc');
-  });
+  sortAscBtn?.addEventListener('click', () => { flushPendingEdits(); CombatAPI.sortByInit('asc'); });
+  sortDescBtn?.addEventListener('click', () => { flushPendingEdits(); CombatAPI.sortByInit('desc'); });
 
-  // Turn navigation (wire if you add IDs in HTML)
   nextTurnBtn?.addEventListener('click', () => CombatAPI.nextTurn());
   prevTurnBtn?.addEventListener('click', () => CombatAPI.prevTurn());
 
-  // Save / Load
   saveBtn?.addEventListener('click', () => saveEncounter(true));
   loadBtn?.addEventListener('click', loadEncounter);
 
@@ -833,19 +832,17 @@
       return;
     }
 
-    // String fields (name)
     const nameSpan = e.target.closest('.editable-text');
     if (nameSpan) { activateInlineEdit(nameSpan, { intOnly: false }); return; }
 
-    // Integer fields (init, ac, tempHp, hp, maxHp) + group.init support
     const intSpan = e.target.closest('.editable-int');
     if (intSpan) { activateInlineEdit(intSpan, { intOnly: true }); return; }
   });
 
   function activateInlineEdit(spanEl, { intOnly = false } = {}) {
-    const type  = spanEl.dataset.type;   // 'combatant' | 'group'
+    const type  = spanEl.dataset.type;
     const id    = spanEl.dataset.id;
-    const field = spanEl.dataset.field;  // 'name' | 'init' | 'ac' | 'tempHp' | 'hp' | 'maxHp'
+    const field = spanEl.dataset.field;
     const old   = spanEl.textContent.trim();
 
     const input = document.createElement('input');
@@ -854,7 +851,6 @@
     input.className = 'inline-editor';
     input.setAttribute('inputmode', intOnly ? 'numeric' : 'text');
 
-    // stash context on input so our committer can read it
     input.dataset.type    = type;
     input.dataset.id      = id;
     input.dataset.field   = field;
@@ -897,12 +893,12 @@
   function onPopoverEsc(e) { if (e.key === 'Escape') closeConditionPopover(); }
   function onDocClickClose(e) {
     if (!_condPopover) return;
-    if (e.target.closest('.cond-popover')) return; // click inside -> ignore
-    if (e.target.closest('.btn-add-status')) return; // clicking the launcher again
+    if (e.target.closest('.cond-popover')) return;
+    if (e.target.closest('.btn-add-status')) return;
     closeConditionPopover();
   }
   function openConditionPopover(anchorBtn, combatantId) {
-    closeConditionPopover(); // only one at a time
+    closeConditionPopover();
 
     const pop = document.createElement('div');
     pop.className = 'cond-popover';
@@ -935,7 +931,6 @@
     document.body.appendChild(pop);
     _condPopover = pop;
 
-    // Fill dropdown from ConditionsCatalog (fallback to local list)
     const sel = pop.querySelector('#condSelect');
     const source = (window.ConditionsCatalog?.list && window.ConditionsCatalog.list.length)
       ? window.ConditionsCatalog.list
@@ -947,19 +942,17 @@
       sel.appendChild(o);
     });
 
-    // Position below if space, else above
     const rect = anchorBtn.getBoundingClientRect();
     const margin = 6;
     const belowTop = rect.bottom + margin;
     const aboveTop = rect.top - margin - pop.offsetHeight;
-    const wantBelow = (belowTop + 200 < window.innerHeight); // rough space check
+    const wantBelow = (belowTop + 200 < window.innerHeight);
 
     const left = Math.min(window.innerWidth - pop.offsetWidth - 8, Math.max(8, rect.left));
     const top  = wantBelow ? belowTop : Math.max(8, aboveTop);
     pop.style.left = `${left}px`;
     pop.style.top  = `${top}px`;
 
-    // Wire buttons
     pop.addEventListener('click', (e) => {
       const act = e.target.closest('button')?.dataset?.act;
       if (!act) return;
@@ -972,16 +965,15 @@
       }
     });
 
-    // lifecycle
     document.addEventListener('keydown', onPopoverEsc);
     document.addEventListener('click', onDocClickClose, true);
 
     sel.focus();
   }
 
-  // --- Condition hover tooltip (mounted inside the Status cell) ---
+  // --- Condition hover tooltip ---
   let tipEl = null;
-  let tipHostCell = null; // the .status-cell currently hosting the tooltip
+  let tipHostCell = null;
   function ensureTip(hostCell) {
     if (tipEl && tipHostCell === hostCell) return tipEl;
     if (tipEl && tipHostCell && tipEl.parentNode === tipHostCell) {
@@ -1055,7 +1047,7 @@
   });
   combatantListBody?.addEventListener('mouseleave', () => { hideCondTip(); });
 
-  // ======= ONE-TIME RESTORE (moved out of render to avoid recursion) =======
+  // ======= ONE-TIME RESTORE =======
   let _restoredOnce = false;
   function tryRestoreLastDraftOnce() {
     if (_restoredOnce || !window.EncounterStore) return;
@@ -1065,32 +1057,29 @@
     if (payload) {
       encounterId   = payload.id;
       encounterName = payload.name || 'Encounter';
-      applyState(payload.state); // calls render() once
+      applyState(payload.state);
     }
     _restoredOnce = true;
   }
 
-
-
-    function toast(msg, ms = 1200) {
-        let el = document.getElementById('tracker-toast');
-        if (!el) {
-            el = document.createElement('div');
-            el.id = 'tracker-toast';
-            Object.assign(el.style, {
-            position: 'fixed', bottom: '16px', right: '16px',
-            background: '#222', color: '#fff', padding: '8px 12px',
-            borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,.2)',
-            zIndex: 99999, opacity: 0, transition: 'opacity .15s ease'
-            });
-            document.body.appendChild(el);
-        }
-        el.textContent = msg;
-        el.style.opacity = 1;
-        clearTimeout(toast._t);
-        toast._t = setTimeout(() => { el.style.opacity = 0; }, ms);
+  function toast(msg, ms = 1200) {
+    let el = document.getElementById('tracker-toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'tracker-toast';
+      Object.assign(el.style, {
+        position: 'fixed', bottom: '16px', right: '16px',
+        background: '#222', color: '#fff', padding: '8px 12px',
+        borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,.2)',
+        zIndex: 99999, opacity: 0, transition: 'opacity .15s ease'
+      });
+      document.body.appendChild(el);
     }
-
+    el.textContent = msg;
+    el.style.opacity = 1;
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => { el.style.opacity = 0; }, ms);
+  }
 
   // ======= INIT =======
   tryRestoreLastDraftOnce();
@@ -1098,3 +1087,4 @@
   setCurrentTurnDisplay();
   render();
 })();
+ */
