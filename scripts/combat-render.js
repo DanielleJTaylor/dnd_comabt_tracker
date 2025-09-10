@@ -195,7 +195,7 @@
           <div class="btn-group">
             <button title="Edit">⚙️</button>
             <button title="Notes">📝</button>
-            <button title="Delete">🗑️</button>
+            <button class="row-del" data-type="combatant" data-id="${c.id}" title="Delete">🗑️</button>
           </div>
         </div>
         <div class="cell dashboard-link-cell"><button title="Toggle Dashboard">📄</button></div>
@@ -292,6 +292,23 @@
   prevTurnBtn?.addEventListener('click', ()=> window.CombatState.prevTurn());
 
   // Checkbox selection
+
+  // Row-level delete (combatant or group)
+  combatantListBody?.addEventListener('click', (e) => {
+    const delBtn = e.target.closest('.row-del');
+    if (!delBtn) return;
+
+    const id = delBtn.dataset.id;
+    const type = delBtn.dataset.type || 'combatant';
+    const label = type === 'group' ? 'this group and all its members' : 'this combatant';
+
+    if (!id) return;
+    if (!confirm(`Delete ${label}?`)) return;
+
+    window.CombatState.removeEntity(id);
+  });
+
+
   combatantListBody?.addEventListener('click', (e) => {
     const cb = e.target.closest('.combatant-checkbox');
     if (!cb) return;

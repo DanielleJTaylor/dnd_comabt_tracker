@@ -217,6 +217,31 @@
     notify();
   }
 
+  // Remove a single entity (combatant or whole group) by id
+  function removeEntity(id) {
+    // try top-level combatant removal
+    const beforeLen = combatants.length;
+    combatants = combatants.filter(x => !(x.type === 'combatant' && x.id === id));
+    if (combatants.length !== beforeLen) { notify(); return true; }
+
+    // try group removal (entire group and its members)
+    const groupBefore = combatants.length;
+    combatants = combatants.filter(x => !(x.type === 'group' && x.id === id));
+    if (combatants.length !== groupBefore) { notify(); return true; }
+
+    // try member removal inside groups
+    let removed = false;
+    combatants.forEach(g => {
+      if (g.type !== 'group') return;
+      const len = g.members?.length || 0;
+      g.members = (g.members || []).filter(m => m.id !== id);
+      if ((g.members?.length || 0) !== len) removed = true;
+    });
+    if (removed) { notify(); return true; }
+    return false;
+  }
+
+
   // Sorting helpers
   function splitNameForSort(name) {
     const trimmed = String(name || '').trim();
