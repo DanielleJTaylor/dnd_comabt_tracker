@@ -184,3 +184,37 @@
 }
 .inline-editor:focus{ border-color:#7fb069; box-shadow:0 0 0 2px rgba(127,176,105,.25); }
 .name-cell .inline-editor{ max-width:220px; }
+
+
+
+
+
+/* Highlight the current combatant’s row (not groups) */
+.tracker-table-row.current-turn {
+  outline: 2px solid #33c47a;
+  background: rgba(51,196,122,0.08);
+}
+
+/* Simple condition chips */
+.condition-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .15rem .4rem;
+  border: 1px solid #bbb;
+  border-radius: 999px;
+  background: #f6f6f6;
+  color: #222;
+  font-size: .8rem;
+  margin: 0 .25rem .25rem 0;
+  white-space: nowrap;
+}
+.condition-chip .x {
+  cursor: pointer;
+  opacity: .6;
+  font-weight: 700;
+}
+.condition-chip.expired {
+  opacity: .35;
+  text-decoration: line-through;
+}

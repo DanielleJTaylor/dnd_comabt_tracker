@@ -1,5 +1,7 @@
 /* scripts/group-selector.js */
-/* UI layer: selection, bulk actions, "choose group" hint, and mini confirm bar */
+/* UI layer: selection, bulk actions, "choose group" hint, mini confirm bar.
+   NOTE: No HP editing or contextmenu prompt here — HP is handled by hp-popup.js,
+   and inline edits are handled by combat_tracker.js's activateInlineEdit(). */
 
 (() => {
   const $ = (sel) => document.querySelector(sel);
@@ -12,6 +14,7 @@
   const selectAllCheckbox = $('#selectAllCheckbox');
   const bulkGroupBtn      = $('#bulkGroupBtn');
   const bulkDeleteBtn     = $('#bulkDeleteBtn');
+  const bulkDamageHealBtn = $('#bulkDamageHealBtn'); // optional
 
   // Hint shown after pressing “Move to Group”
   const chooseHint        = $('#choose-group-hint');
@@ -62,14 +65,8 @@
   }
 
   // ---------- Hint helpers ----------
-  function showChooseHint() {
-    chooseMode = true;
-    chooseHint?.classList.remove('hidden');
-  }
-  function hideChooseHint() {
-    chooseMode = false;
-    chooseHint?.classList.add('hidden');
-  }
+  function showChooseHint() { chooseMode = true;  chooseHint?.classList.remove('hidden'); }
+  function hideChooseHint() { chooseMode = false; chooseHint?.classList.add('hidden'); }
 
   // ---------- Mini confirm helpers ----------
   function showMiniConfirm(groupId, groupName) {
@@ -156,6 +153,21 @@
     }
   });
 
+  // Optional bulk Damage/Heal launcher (kept if you want it; otherwise remove this block)
+  // It does NOT show a mini editor; you can later wire this to your hp-popup if desired.
+  bulkDamageHealBtn?.addEventListener('click', () => {
+    if (!window.CombatAPI || CombatAPI.isLocked()) return;
+    const ids = CombatAPI.getSelectedIds?.();
+    const count = ids?.size || 0;
+    if (!count) {
+      selectionCounter?.classList.add('flash');
+      setTimeout(() => selectionCounter?.classList.remove('flash'), 600);
+      return;
+    }
+    // You can open your popup in "bulk" mode later. For now, do nothing or prompt.
+    // Intentionally left minimal per request.
+  });
+
   // Select all
   selectAllCheckbox?.addEventListener('change', () => {
     if (!window.CombatAPI || CombatAPI.isLocked()) return;
@@ -181,7 +193,7 @@
   // Re-sync UI after data layer re-renders
   window.addEventListener('tracker:render', updateBulkBarUI);
 
-  // Initial paint sync (in case CombatAPI rendered before this loaded)
+  // Initial paint sync
   if (document.readyState !== 'loading') updateBulkBarUI();
   else window.addEventListener('DOMContentLoaded', updateBulkBarUI);
 })();

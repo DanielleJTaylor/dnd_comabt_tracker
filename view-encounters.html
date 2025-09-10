@@ -1,24 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>View Encounters</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="css/view-dashboards.css">
 </head>
 <body>
-  <header>
-    <h2>📜 Saved Encounters</h2>
-    <button onclick="location.href='index.html'">⬅ Back to Home</button>
-    <button id="createEncounterBtn">➕ Create New Encounter</button>
-  </header>
+  <div id="encounters-view">
+    <header class="header">
+      <h1>🧭 Encounters</h1>
+      <a href="encounter.html" class="btn">Back to Tracker</a>
+    </header>
 
-  <main>
-    <ul id="encounter-list">
-      <li><a href="encounter.html">Encounter 1</a></li>
-      <li><a href="encounter.html">Encounter 2</a></li>
-    </ul>
-  </main>
-  
+    <div class="controls">
+      <button id="newEncounterBtn">➕ New Encounter</button>
+    </div>
+
+    <main id="encounters-list"></main>
+  </div>
+
+    <script src="scripts/encounters-store.js"></script>
+    <script src="scripts/view-encounters.js" defer></script>
 </body>
 </html>
