@@ -79,11 +79,6 @@
   }
 
   // ======= RENDER =======
-// scripts/combat_tracker.js
-
-// ... (previous JavaScript) ...
-
-  // ======= RENDER =======
   function render() {
     combatantListBody.innerHTML = '';
 
@@ -114,55 +109,50 @@
       combatantListBody.appendChild(row);
     };
 
-
-
-// ... (rest of the JavaScript) ...
-
-  const renderCombatantRow = (c, isInGroup = false) => {
-    const isSelected = selectedCombatantIds.has(c.id);
-    const row = document.createElement('div');
-    row.className = `tracker-table-row ${isInGroup ? 'in-group' : ''} ${isSelected ? 'selected' : ''}`;
-    row.dataset.id = c.id;
-    row.dataset.type = 'combatant';
-    row.innerHTML = `
-      <div class="cell select-cell">
-        <input type="checkbox" class="combatant-checkbox" data-id="${c.id}" ${isSelected ? 'checked' : ''}>
-      </div>
-      <div class="cell image-cell">
-        <img class="editable-img" data-type="combatant" data-id="${c.id}" src="${c.imageUrl || 'images/icon.png'}" alt="${c.name}">
-      </div>
-      <div class="cell init-cell">
-        <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="init">${c.init}</span>
-      </div>
-      <div class="cell name-cell">
-        <span class="editable-text" data-type="combatant" data-id="${c.id}" data-field="name">${c.name}</span>
-      </div>
-      <div class="cell ac-cell">
-        <span class="ac-shield">🛡️</span>
-        <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="ac">${c.ac}</span>
-      </div>
-      <div class="cell hp-cell">
-        <span class="hp-heart">❤️</span>
-        <span>${c.hp} / ${c.maxHp}</span>
-      </div>
-      <div class="cell temp-hp-cell">
-        <span class="temp-icon">✨</span>
-        <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="tempHp">${c.tempHp || 0}</span>
-      </div>
-      <div class="cell status-cell"><button class="btn-add-status">+ Add</button></div>
-      <div class="cell role-cell">${c.role?.toUpperCase?.() || ''}</div>
-      <div class="cell actions-cell">
-        <div class="btn-group">
-          <button title="Edit">⚙️</button>
-          <button title="Notes">📝</button>
-          <button title="Delete">🗑️</button>
+    const renderCombatantRow = (c, isInGroup = false) => {
+      const isSelected = selectedCombatantIds.has(c.id);
+      const row = document.createElement('div');
+      row.className = `tracker-table-row ${isInGroup ? 'in-group' : ''} ${isSelected ? 'selected' : ''}`;
+      row.dataset.id = c.id;
+      row.dataset.type = 'combatant';
+      row.innerHTML = `
+        <div class="cell select-cell">
+          <input type="checkbox" class="combatant-checkbox" data-id="${c.id}" ${isSelected ? 'checked' : ''}>
         </div>
-      </div>
-      <div class="cell dashboard-link-cell"><button title="Toggle Dashboard">📄</button></div>
-    `;
-    combatantListBody.appendChild(row);
-  };
-
+        <div class="cell image-cell">
+          <img class="editable-img" data-type="combatant" data-id="${c.id}" src="${c.imageUrl || 'images/icon.png'}" alt="${c.name}">
+        </div>
+        <div class="cell init-cell">
+          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="init">${c.init}</span>
+        </div>
+        <div class="cell name-cell">
+          <span class="editable-text" data-type="combatant" data-id="${c.id}" data-field="name">${c.name}</span>
+        </div>
+        <div class="cell ac-cell">
+          <span class="ac-shield">🛡️</span>
+          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="ac">${c.ac}</span>
+        </div>
+        <div class="cell hp-cell">
+          <span class="hp-heart">❤️</span>
+          <span>${c.hp} / ${c.maxHp}</span>
+        </div>
+        <div class="cell temp-hp-cell">
+          <span class="temp-icon">✨</span>
+          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="tempHp">${c.tempHp || 0}</span>
+        </div>
+        <div class="cell status-cell"><button class="btn-add-status">+ Add</button></div>
+        <div class="cell role-cell">${c.role?.toUpperCase?.() || ''}</div>
+        <div class="cell actions-cell">
+          <div class="btn-group">
+            <button title="Edit">⚙️</button>
+            <button title="Notes">📝</button>
+            <button title="Delete">🗑️</button>
+          </div>
+        </div>
+        <div class="cell dashboard-link-cell"><button title="Toggle Dashboard">📄</button></div>
+      `;
+      combatantListBody.appendChild(row);
+    };
 
     // Paint top-level rows, then members under each group
     combatants.forEach(item => {
@@ -310,6 +300,53 @@
     render();
   }
 
+  // ===== Sorting helpers (name-aware tie-breaking) =====
+
+  // Split "Goblin 12" -> { base: "goblin", num: 12 }, "Ogre" -> { base: "ogre", num: null }
+  function splitNameForSort(name) {
+    const trimmed = String(name || '').trim();
+    const m = trimmed.match(/^(.*?)(?:\s+(\d+))?$/); // base [num]
+    const base = (m?.[1] || '').toLowerCase();
+    const num = m?.[2] ? parseInt(m[2], 10) : null;
+    return { base, num };
+  }
+
+  // Compare names with direction for alphabet only.
+  // alphaDir: 'asc' (A→Z) or 'desc' (Z→A). Number suffix always ascending.
+  function compareNames(aName, bName, alphaDir = 'asc') {
+    const A = splitNameForSort(aName);
+    const B = splitNameForSort(bName);
+
+    if (A.base !== B.base) {
+      // A→Z or Z→A for base
+      return alphaDir === 'asc'
+        ? A.base.localeCompare(B.base)
+        : B.base.localeCompare(A.base);
+    }
+    // Same base: compare numeric suffix (ascending; null treated as Infinity)
+    const aNum = A.num == null ? Number.POSITIVE_INFINITY : A.num;
+    const bNum = B.num == null ? Number.POSITIVE_INFINITY : B.num;
+    if (aNum !== bNum) return aNum - bNum;
+
+    // Final fallback to whole name to make sort stable
+    return aName.localeCompare(bName);
+  }
+
+  // dir: 'asc' or 'desc'. data: your in-memory list of combatants
+  function sortByInitiativeWithTies(data, dir) {
+    const alphaDir = dir === 'desc' ? 'asc' : 'desc'; // if high init wins, break ties A→Z
+    data.sort((a, b) => {
+      const aInit = Number(a.init || 0);
+      const bInit = Number(b.init || 0);
+
+      if (aInit !== bInit) {
+        return dir === 'asc' ? aInit - bInit : bInit - aInit;
+      }
+      // tie-breaker by name with requested alphabet direction
+      return compareNames(a.name || '', b.name || '', alphaDir);
+    });
+  }
+
   // ======= PUBLIC API (used by group-selector.js) =======
   window.CombatAPI = {
     // data
@@ -404,7 +441,7 @@
       return;
     }
 
-    // Integer fields (init, ac, tempHp)
+    // Integer fields (init, ac, tempHp) + group.init support
     const intSpan = e.target.closest('.editable-int');
     if (intSpan) {
       activateInlineEdit(intSpan, { intOnly: true });
@@ -449,6 +486,10 @@
     });
     input.addEventListener('blur', commit);
   }
+
+  // ===== Sorting helpers (paste near other helpers) =====
+  // Split "Goblin 12" -> { base: "goblin", num: 12 }, "Ogre" -> { base: "ogre", num: null }
+  // (kept above)
 
   // single hidden file input for image picking
   let _imagePicker = null;
