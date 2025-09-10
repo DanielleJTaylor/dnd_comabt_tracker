@@ -84,6 +84,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (t) onMove(t.clientX);
   }, { passive: true });
 
+  document.getElementById('encounterBackBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    window.location.href = 'view-encounters.html';
+  });
+
   // Global stop listeners
   window.addEventListener('mouseup', stopDrag);
   window.addEventListener('touchend', stopDrag);

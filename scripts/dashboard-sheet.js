@@ -1,6 +1,6 @@
-// dashboard-sheet.js
-// Hold-to-drag, ghost previews, collision pushing, right/bottom/corner resize,
-// image blocks (no mixed text), autosave + export.
+// scripts/dashboard-sheet.js
+// Locked dashboard: text is editable, but blocks cannot be moved, resized, deleted, or added.
+// Also disables image actions while locked. Autosave + export still work.
 
 document.addEventListener('DOMContentLoaded', () => {
   // ---- DOM & State ----
@@ -12,13 +12,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const exportBtn        = document.getElementById('export-btn');
   const saveStatusBtn    = document.getElementById('save-status-btn');
 
-  let isLocked = false;
-  let ghostEl = null; // A single ghost element for previews
+  // Force-locked mode
+  // --- at the top near other state ---
+  const FORCE_LOCK = false;   // was true
+  let isLocked = true;        // start locked by default, but allow toggling
+  let ghostEl = null; // ghost for previews (unused while locked, but kept for completeness)
 
   // Saving state
   let saveTimer = null;
   let saveInFlight = false;
-  let lastSavedSnapshot = null; // to cheaply avoid redundant saves
+  let lastSavedSnapshot = null;
   const DASH_ID = getDashboardIdFromURL(); // current sheet id
 
   // -------- utils --------
@@ -32,15 +35,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function beginInteractionSelectionGuard() {
-    // stop typing immediately
-    if (document.activeElement && document.activeElement.blur) {
-      document.activeElement.blur();
-    }
-    // clear any highlighted text
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     const sel = window.getSelection && window.getSelection();
     if (sel && sel.removeAllRanges) sel.removeAllRanges();
-
-    // disable selection while moving
     document.body.classList.add('no-select');
   }
   function endInteractionSelectionGuard() {
@@ -133,8 +130,15 @@ document.addEventListener('DOMContentLoaded', () => {
     wrap.querySelector('img').src = dataUrl;
     content.appendChild(wrap);
 
-    bindImageResizer(block);
-    bindImageActions(block);
+    // While locked, disable image resizer/actions entirely
+    if (!isLocked) {
+      bindImageResizer(block);
+      bindImageActions(block);
+    } else {
+      const acts = wrap.querySelector('.img-actions');
+      if (acts) acts.remove();             // no actions in locked mode
+      wrap.style.pointerEvents = 'none';   // no drag/resize on the image area
+    }
   }
 
   function revokeImageBlock(block) {
@@ -146,6 +150,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function bindImageResizer(block) {
+    if (isLocked) return; // guard
     const wrap = block.querySelector('.img-wrap');
     if (!wrap) return;
     wrap.style.width = '100%';
@@ -190,6 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function bindImageActions(block) {
+    if (isLocked) return; // guard
     const actions = block.querySelector('.img-actions');
     const wrap = block.querySelector('.img-wrap');
     const img = wrap?.querySelector('img');
@@ -291,7 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return JSON.stringify(payload);
   }
 
-  function deepEqualJSON(a, b) { return a === b; }
+  const deepEqualJSON = (a, b) => a === b;
 
   function saveNow() {
     if (!DASH_ID) return;
@@ -353,7 +359,14 @@ document.addEventListener('DOMContentLoaded', () => {
         el.querySelector('.block-content').innerHTML = b.html || '';
       }
 
+      // Bind events (drag/resize are skipped in locked mode)
       bindBlockEvents(el);
+
+      // In locked mode, hide delete/resize affordances entirely
+      if (isLocked) {
+        el.querySelector('.delete-btn')?.remove();
+        el.querySelectorAll('.resize-handle')?.forEach(h => h.remove());
+      }
     });
 
     lastSavedSnapshot = serializeSheet();
@@ -366,7 +379,23 @@ document.addEventListener('DOMContentLoaded', () => {
       try { applySheetData(JSON.parse(raw)); return; }
       catch (e) { console.warn('Failed to parse saved dashboard; starting fresh.', e); }
     }
-    createNewBlock();
+    // Starter block even when locked, so there is editable text
+    const starter = document.createElement('div');
+    starter.className = 'block';
+    starter.innerHTML = `
+      <div class="block-content" contenteditable="true">Start typing...</div>
+      <button class="delete-btn" title="Delete Block">×</button>
+      <div class="resize-handle right"></div>
+      <div class="resize-handle bottom"></div>
+      <div class="resize-handle bottom-right"></div>
+    `;
+    writeRect(starter, dropToFreeRow({ colStart: 1, rowStart: 1, colSpan: 4, rowSpan: 4 }, null));
+    blocksContainer.appendChild(starter);
+    bindBlockEvents(starter);
+    if (isLocked) {
+      starter.querySelector('.delete-btn')?.remove();
+      starter.querySelectorAll('.resize-handle')?.forEach(h => h.remove());
+    }
     requestSave(0);
   }
 
@@ -405,7 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ========== BLOCK CREATION ==========
   function createNewBlock() {
-    if (isLocked) return;
+    if (isLocked) return; // locked mode: cannot add blocks
     const rect = dropToFreeRow({ colStart: 1, rowStart: 1, colSpan: 4, rowSpan: 4 }, null);
     const block = document.createElement('div');
     block.className = 'block';
@@ -424,84 +453,94 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ========== BIND INTERACT.JS EVENTS ==========
   function bindBlockEvents(el) {
-    interact(el)
-      .draggable({
-        hold: 250,
-        allowFrom: el,
-        ignoreFrom: 'button, .resize-handle',
-        listeners: {
-          start: e => {
-            beginInteractionSelectionGuard();
-            e.target.classList.add('dragging-active');
-            e.target.setAttribute('data-start-rect', JSON.stringify(readRect(e.target)));
-            updateGhost(readRect(e.target));
-          },
-          move: dragMove,
-          end: e => {
-            endInteractionSelectionGuard();
-            dragEnd(e);
-          }
-        }
-      })
-      .resizable({
-        edges: { top: false, left: false, bottom: true, right: true },
-        listeners: {
-          start: e => {
-            beginInteractionSelectionGuard();
-            e.target.classList.add('resizing-active');
-            updateGhost(readRect(e.target));
-            e.target.setAttribute('data-start-rect', JSON.stringify(readRect(e.target)));
-          },
-          move: resizeMove,
-          end: e => {
-            endInteractionSelectionGuard();
-            resizeEnd(e);
-          }
-        }
-      });
-
+    // Text remains editable even when locked
     const content = el.querySelector('.block-content');
+
+    if (!isLocked) {
+      // Only enable drag/resize when unlocked
+      interact(el)
+        .draggable({
+          hold: 250,
+          allowFrom: el,
+          ignoreFrom: 'button, .resize-handle',
+          listeners: {
+            start: e => {
+              beginInteractionSelectionGuard();
+              e.target.classList.add('dragging-active');
+              e.target.setAttribute('data-start-rect', JSON.stringify(readRect(e.target)));
+              updateGhost(readRect(e.target));
+            },
+            move: dragMove,
+            end: e => {
+              endInteractionSelectionGuard();
+              dragEnd(e);
+            }
+          }
+        })
+        .resizable({
+          edges: { top: false, left: false, bottom: true, right: true },
+          listeners: {
+            start: e => {
+              beginInteractionSelectionGuard();
+              e.target.classList.add('resizing-active');
+              updateGhost(readRect(e.target));
+              e.target.setAttribute('data-start-rect', JSON.stringify(readRect(e.target)));
+            },
+            move: resizeMove,
+            end: e => {
+              endInteractionSelectionGuard();
+              resizeEnd(e);
+            }
+          }
+        });
+
+      el.querySelector('.delete-btn')?.addEventListener('click', () => {
+        el.remove();
+        requestSave();
+      });
+    }
+
+    // Save on text edits in both modes
     content.addEventListener('input', () => requestSave());
     content.addEventListener('blur', () => requestSave());
 
-    // PASTE → image block
+    // PASTE / DROP: in locked mode allow plain text only (no image conversion)
     content.addEventListener('paste', async (e) => {
-      if (isLocked) return;
-      const cd = e.clipboardData;
-      if (!cd) return;
+      if (!isLocked) {
+        const cd = e.clipboardData;
+        if (!cd) return;
 
-      const file = [...cd.files].find(f => f.type.startsWith('image/'));
-      if (file) {
-        e.preventDefault();
-        const url = await fileToDataUrl(file);
-        makeImageBlock(el, url);
-        requestSave();
-        return;
-      }
-
-      const html = cd.getData('text/html');
-      if (html) {
-        const temp = document.createElement('div');
-        temp.innerHTML = html;
-        const pastedImg = temp.querySelector('img[src]');
-        if (pastedImg?.src) {
+        const file = [...cd.files].find(f => f.type.startsWith('image/'));
+        if (file) {
           e.preventDefault();
-          makeImageBlock(el, pastedImg.src);
+          const url = await fileToDataUrl(file);
+          makeImageBlock(el, url);
           requestSave();
           return;
         }
-      }
 
-      if (el.classList.contains('image-block')) e.preventDefault();
+        const html = cd.getData('text/html');
+        if (html) {
+          const temp = document.createElement('div');
+          temp.innerHTML = html;
+          const pastedImg = temp.querySelector('img[src]');
+          if (pastedImg?.src) {
+            e.preventDefault();
+            makeImageBlock(el, pastedImg.src);
+            requestSave();
+            return;
+          }
+        }
+        if (el.classList.contains('image-block')) e.preventDefault();
+      }
+      // locked: fall through to default behavior → text paste works
     });
 
-    // DRAG & DROP → image block
     content.addEventListener('dragover', (e) => {
-      if (isLocked) return;
-      e.preventDefault();
+      if (!isLocked) e.preventDefault();
     });
     content.addEventListener('drop', async (e) => {
-      if (isLocked) return;
+      if (isLocked) return; // ignore drops while locked
       e.preventDefault();
       const dt = e.dataTransfer;
 
@@ -526,9 +565,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // Block typing while image mode (except remove)
+    // When locked and block is in image mode, block typing (can’t edit image)
     content.addEventListener('keydown', (e) => {
       if (!el.classList.contains('image-block')) return;
+      if (isLocked) {
+        // fully block typing while image mode in locked state
+        e.preventDefault();
+        return;
+      }
+      // unlocked behavior below:
       if (e.key === 'Backspace' || e.key === 'Delete') {
         e.preventDefault();
         revokeImageBlock(el);
@@ -537,16 +582,9 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       e.preventDefault();
     });
-
-    el.querySelector('.delete-btn')?.addEventListener('click', () => {
-      if (!isLocked) {
-        el.remove();
-        requestSave();
-      }
-    });
   }
 
-  // --- DRAG LISTENERS ---
+  // --- DRAG/RESIZE LISTENERS (only used when unlocked) ---
   function dragMove(e) {
     const metrics = getMetrics();
     const originalRect = readRect(e.target);
@@ -589,7 +627,6 @@ document.addEventListener('DOMContentLoaded', () => {
     requestSave();
   }
 
-  // --- RESIZE LISTENERS ---
   function resizeMove(e) {
     const metrics = getMetrics();
     const startRect = JSON.parse(e.target.getAttribute('data-start-rect'));
@@ -626,14 +663,46 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ========== UI & WIRING ==========
-  function toggleLock() {
-    isLocked = !isLocked;
+    function setInteractivityEnabled(enabled) {
+    // enable/disable drag+resize and controls on every block
+    document.querySelectorAll('.block').forEach((el) => {
+        // InteractJS toggles
+        interact(el).draggable({ enabled });
+        interact(el).resizable({ enabled });
+
+        // UI affordances
+        el.querySelector('.delete-btn')?.classList.toggle('hidden', !enabled);
+        el.querySelectorAll('.resize-handle')?.forEach(h => h.classList.toggle('hidden', !enabled));
+
+        // Image actions / resizing are handled by CSS (see snippet below)
+    });
+    // text remains editable in both modes (except image-blocks)
+    document.querySelectorAll('.block .block-content').forEach(content => {
+        const inImage = content.closest('.image-block');
+        content.setAttribute('contenteditable', String(!inImage)); // text blocks editable
+    });
+    }
+
+    function applyLockedUI() {
     sheetContainer.classList.toggle('is-locked', isLocked);
     lockButton.textContent = isLocked ? '🔒 Locked' : '🔓 Unlocked';
-    document.querySelectorAll('[contenteditable]').forEach(el => {
-      el.setAttribute('contenteditable', String(!isLocked));
-    });
-  }
+
+    // Enable/disable interactivity
+    setInteractivityEnabled(!isLocked);
+
+    // Add Block button only when unlocked
+    if (addBlockBtn) {
+        addBlockBtn.classList.toggle('hidden', isLocked);
+        addBlockBtn.disabled = isLocked;
+    }
+    }
+
+    function toggleLock() {
+    if (FORCE_LOCK) return;      // safety guard (now false)
+    isLocked = !isLocked;
+    applyLockedUI();
+    }
+
 
   exportBtn?.addEventListener('click', exportCurrentSheet);
 
@@ -648,28 +717,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-    // Smart Back in the editor
-    document.getElementById('dash-back')?.addEventListener('click', (e) => {
+  // Smart Back in the editor (keeps navigation inside iframe)
+  document.getElementById('dash-back')?.addEventListener('click', (e) => {
     e.preventDefault();
     if (history.length > 1) {
-        history.back();
+      history.back();
     } else {
-        // No history (e.g., opened directly) → go to dashboards home
-        location.href = 'view-dashboards.html';
+      location.href = 'view-dashboards.html';
     }
-    });
+  });
 
-
-
-  lockButton.addEventListener('click', toggleLock);
-  addBlockBtn.addEventListener('click', createNewBlock);
+  // Lock button still present but inert in forced mode
+  lockButton?.addEventListener('click', toggleLock);
+  addBlockBtn?.addEventListener('click', createNewBlock); // will no-op while locked
 
   // Title changes save
   document.getElementById('sheet-title')?.addEventListener('input', () => requestSave());
   document.getElementById('sheet-title')?.addEventListener('blur', () => requestSave());
 
   // Initial setup
+  applyLockedUI();
   loadOrInit();
-
-  
 });
