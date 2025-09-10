@@ -7,7 +7,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const importBtn = document.getElementById('importBtn');
   const importInput = document.getElementById('importInput');
   const breadcrumbsEl = document.getElementById('dash-breadcrumbs');
-  
 
   const TREE_KEY = 'dash_tree_v1';
 
@@ -18,13 +17,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const uid = (p='id_') => `${p}${Date.now()}_${Math.floor(Math.random()*1e6)}`;
   const DND_MIME = 'application/x-dash-node';
 
-
-    // cache current drag since getData isn't available in dragover reliably
-    let dndCurrent = null;
-    let wasDragging = false; // to suppress click after drag
-
-
-
+  // cache current drag since getData isn't available in dragover reliably
+  let dndCurrent = null;
+  let wasDragging = false; // to suppress click after drag
 
   function loadTree() {
     const raw = localStorage.getItem(TREE_KEY);
@@ -131,104 +126,102 @@ document.addEventListener('DOMContentLoaded', () => {
     const u = new URL(location.href);
     if (currentFolderId === 'root') u.searchParams.delete('folder');
     else u.searchParams.set('folder', currentFolderId);
-    history.replaceState(null, '', u);
+    history.replaceState(null, '', u); // keep replaceState (no history growth)
     render();
   }
 
-    // ---------- Drag & Drop ----------
-    function makeDraggableCard(el, node) {
+  // ---------- Drag & Drop ----------
+  function makeDraggableCard(el, node) {
     el.draggable = true;
     el.dataset.nodeId = node.id;
     el.dataset.nodeType = node.type;
 
     el.addEventListener('dragstart', (e) => {
-        wasDragging = true;
-        dndCurrent = { id: node.id, type: node.type };
-        e.dataTransfer.effectAllowed = 'move';
-        try {
+      wasDragging = true;
+      dndCurrent = { id: node.id, type: node.type };
+      e.dataTransfer.effectAllowed = 'move';
+      try {
         e.dataTransfer.setData(DND_MIME, JSON.stringify(dndCurrent));
         e.dataTransfer.setData('text/plain', node.id); // fallback
-        } catch {}
+      } catch {}
     });
 
     // Clear the global cache after the DnD gesture finishes
     el.addEventListener('dragend', () => {
-        // allow click suppression for this tick
-        setTimeout(() => { wasDragging = false; }, 0);
-        dndCurrent = null;
+      // allow click suppression for this tick
+      setTimeout(() => { wasDragging = false; }, 0);
+      dndCurrent = null;
     });
 
     // Prevent anchor navigation if the event is actually a drag-release
     el.addEventListener('click', (evt) => {
-        if (wasDragging) {
+      if (wasDragging) {
         evt.preventDefault();
         evt.stopPropagation();
-        }
+      }
     }, true);
-    }
-
+  }
 
   function makeFolderDroppable(el, folderNode) {
     el.addEventListener('dragover', (e) => {
-        if (!dndCurrent) return; // nothing we care about
-        const ok = canDrop(dndCurrent, folderNode);
-        if (ok) {
+      if (!dndCurrent) return; // nothing we care about
+      const ok = canDrop(dndCurrent, folderNode);
+      if (ok) {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         el.classList.add('drop-ok');
         el.classList.remove('drop-bad');
-        } else {
+      } else {
         el.classList.add('drop-bad');
         el.classList.remove('drop-ok');
-        }
+      }
     });
     el.addEventListener('dragleave', () => {
       el.classList.remove('drop-ok','drop-bad');
     });
     el.addEventListener('drop', (e) => {
-        e.preventDefault();   // <-- always prevent first
-        el.classList.remove('drop-ok','drop-bad');
-        const payload = getDragPayload(e);
-        if (!payload) return;
-        if (canDrop(payload, folderNode)) {
-            if (moveNode(payload.id, folderNode.id)) render();
-        }
+      e.preventDefault();   // <-- always prevent first
+      el.classList.remove('drop-ok','drop-bad');
+      const payload = getDragPayload(e);
+      if (!payload) return;
+      if (canDrop(payload, folderNode)) {
+        if (moveNode(payload.id, folderNode.id)) render();
+      }
     });
   }
 
   function makeBreadcrumbDroppable(aEl, folderId) {
     aEl.addEventListener('dragover', (e) => {
-        if (!dndCurrent) return; // nothing we care about
-        const folder = findNodeById(tree, folderId)?.node;
-        const ok = folder?.type === 'folder' && canDrop(dndCurrent, folder);
-        if (ok) { e.preventDefault(); aEl.classList.add('drop-ok'); aEl.classList.remove('drop-bad'); }
-        else { aEl.classList.add('drop-bad'); aEl.classList.remove('drop-ok'); }
-        });
+      if (!dndCurrent) return; // nothing we care about
+      const folder = findNodeById(tree, folderId)?.node;
+      const ok = folder?.type === 'folder' && canDrop(dndCurrent, folder);
+      if (ok) { e.preventDefault(); aEl.classList.add('drop-ok'); aEl.classList.remove('drop-bad'); }
+      else { aEl.classList.add('drop-bad'); aEl.classList.remove('drop-ok'); }
+    });
     aEl.addEventListener('dragleave', () => aEl.classList.remove('drop-ok','drop-bad'));
     aEl.addEventListener('drop', (e) => {
-        const payload = getDragPayload(e); // works on drop (or falls back to cache)
-        aEl.classList.remove('drop-ok','drop-bad');
-        if (!payload) return;
-        const folder = findNodeById(tree, folderId)?.node;
-        if (folder?.type === 'folder' && canDrop(payload, folder)) {
-            e.preventDefault();
-            if (moveNode(payload.id, folderId)) render();
-        }
+      const payload = getDragPayload(e); // works on drop (or falls back to cache)
+      aEl.classList.remove('drop-ok','drop-bad');
+      if (!payload) return;
+      const folder = findNodeById(tree, folderId)?.node;
+      if (folder?.type === 'folder' && canDrop(payload, folder)) {
+        e.preventDefault();
+        if (moveNode(payload.id, folderId)) render();
+      }
     });
   }
 
-    function getDragPayload(e) {
+  function getDragPayload(e) {
     // First prefer the active cache (works for dragover)
     if (dndCurrent) return dndCurrent;
 
     // Fallback: can read on drop in some browsers
     try {
-        const raw = e.dataTransfer.getData(DND_MIME);
-        if (raw) return JSON.parse(raw);
+      const raw = e.dataTransfer.getData(DND_MIME);
+      if (raw) return JSON.parse(raw);
     } catch {}
     return null;
-    }
-
+  }
 
   function canDrop(payload, destFolderNode) {
     if (!payload || destFolderNode.type !== 'folder') return false;
@@ -425,6 +418,20 @@ document.addEventListener('DOMContentLoaded', () => {
     await importDashboardsFromFiles(e.target.files);
     e.target.value = '';
   });
+
+  // ---------- Back button: Go up one folder (no history needed) ----------
+  function getParentFolderId() {
+    const parent = findParentOf(tree, currentFolderId);
+    return parent ? parent.id : 'root';
+  }
+  (() => {
+    const back = document.getElementById('dash-back');
+    if (!back) return;
+    back.addEventListener('click', (e) => {
+      e.preventDefault();
+      setCurrentFolder(getParentFolderId());
+    });
+  })();
 
   // First render + refresh titles
   render();

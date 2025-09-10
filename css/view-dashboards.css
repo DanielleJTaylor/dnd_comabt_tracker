@@ -162,3 +162,16 @@ body {
 
 .dash-breadcrumbs a.drop-ok { box-shadow: 0 0 0 2px #7fb069 inset; border-radius: 4px; }
 .dash-breadcrumbs a.drop-bad { box-shadow: 0 0 0 2px #c0392b inset; border-radius: 4px; }
+
+
+#dashboard-header .header-left,
+.sheet-header .header-left {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+#dash-back.btn {
+  padding: 6px 10px;
+  text-decoration: none;
+}

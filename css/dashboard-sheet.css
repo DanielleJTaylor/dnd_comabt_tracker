@@ -150,3 +150,15 @@ body.no-select { user-select: none; -webkit-user-select: none; }
   user-select: none !important;
   -webkit-user-select: none !important;
 }
+
+#dashboard-header .header-left,
+.sheet-header .header-left {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+#dash-back.btn {
+  padding: 6px 10px;
+  text-decoration: none;
+}

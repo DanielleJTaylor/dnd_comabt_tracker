@@ -648,6 +648,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+    // Smart Back in the editor
+    document.getElementById('dash-back')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (history.length > 1) {
+        history.back();
+    } else {
+        // No history (e.g., opened directly) → go to dashboards home
+        location.href = 'view-dashboards.html';
+    }
+    });
+
+
+
   lockButton.addEventListener('click', toggleLock);
   addBlockBtn.addEventListener('click', createNewBlock);
 
@@ -657,4 +670,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initial setup
   loadOrInit();
+
+  
 });
