@@ -11,23 +11,24 @@
     <!-- Main container for the dashboard view -->
     <div id="dashboard-viewer">
         <header id="dashboard-header">
-        <div class="header-left">
-            <a href="index.html" id="dash-back" class="btn">← Back</a>
-            <h1>📋 Dashboards</h1>
-        </div>
+            <div class="header-left">
+                <!-- This button ALWAYS goes to the home page -->
+                <a href="index.html" id="dash-back" class="btn">← Back to Home</a>
+                <!-- This button will be shown by JS to go up one folder level -->
+                <button id="up-folder-btn" class="btn" style="display: none;">↑ Up a Folder</button>
+                <h1>📋 Dashboards</h1>
+            </div>
         </header>
 
-        <!-- NEW: breadcrumbs -->
+        <!-- Breadcrumbs for folder navigation -->
         <nav id="dash-breadcrumbs" class="dash-breadcrumbs"></nav>
 
         <div class="dashboard-controls">
-        <button id="newDashboardBtn">➕ New Dashboard</button>
-        <button id="sortBtn">⇅ Sort A-Z</button>
-        <button id="newFolderBtn">📁 New Folder</button>
-
-        <!-- If you already added import earlier, keep it -->
-        <button id="importBtn">📥 Import</button>
-        <input id="importInput" type="file" accept="application/json,.json" multiple style="display:none;">
+            <button id="newDashboardBtn">➕ New Dashboard</button>
+            <button id="sortBtn">⇅ Sort A-Z</button>
+            <button id="newFolderBtn">📁 New Folder</button>
+            <button id="importBtn">📥 Import</button>
+            <input id="importInput" type="file" accept="application/json,.json" multiple style="display:none;">
         </div>
 
         <main id="dashboard-list-container">
