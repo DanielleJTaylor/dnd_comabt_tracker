@@ -418,21 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
     await importDashboardsFromFiles(e.target.files);
     e.target.value = '';
   });
-
-  // ---------- Back button: Go up one folder (no history needed) ----------
-  function getParentFolderId() {
-    const parent = findParentOf(tree, currentFolderId);
-    return parent ? parent.id : 'root';
-  }
-  (() => {
-    const back = document.getElementById('dash-back');
-    if (!back) return;
-    back.addEventListener('click', (e) => {
-      e.preventDefault();
-      setCurrentFolder(getParentFolderId());
-    });
-  })();
-
+  
   // First render + refresh titles
   render();
   refreshDashboardTitlesFromStorage();

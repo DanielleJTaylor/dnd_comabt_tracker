@@ -717,14 +717,40 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Smart Back in the editor (keeps navigation inside iframe)
+  // Back button that navigates up the folder hierarchy
   document.getElementById('dash-back')?.addEventListener('click', (e) => {
     e.preventDefault();
-    if (history.length > 1) {
-      history.back();
-    } else {
-      location.href = 'view-dashboards.html';
+
+    // Helper to find the parent of a node in the tree
+    function findParentOf(node, targetId) {
+      if (node.type !== 'folder' || !Array.isArray(node.children)) return null;
+      for (const child of node.children) {
+        if (child.id === targetId) return node; // This node is the parent
+        if (child.type === 'folder') {
+          const deep = findParentOf(child, targetId);
+          if (deep) return deep;
+        }
+      }
+      return null;
     }
+
+    try {
+      const treeRaw = localStorage.getItem('dash_tree_v1');
+      if (treeRaw) {
+        const tree = JSON.parse(treeRaw);
+        const parent = findParentOf(tree, DASH_ID); // DASH_ID is already defined in the script
+        if (parent && parent.id !== 'root') {
+          // Go to the parent folder view
+          window.location.href = `view-dashboards.html?folder=${parent.id}`;
+          return;
+        }
+      }
+    } catch (err) {
+      console.error("Could not determine parent folder, falling back.", err);
+    }
+    
+    // Default fallback to the root dashboard view
+    window.location.href = 'view-dashboards.html';
   });
 
   // Lock button still present but inert in forced mode
