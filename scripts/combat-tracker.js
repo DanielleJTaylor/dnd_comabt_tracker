@@ -1,0 +1,907 @@
+// scripts/combat-tracker.js
+(() => {
+  // ====== STATE ======
+  let combatants = [];                 // mix: {type:'combatant'} and {type:'group', members:[]}
+  let selectedCombatantIds = new Set();
+  let isLocked = false;
+
+  let currentRound = 1;
+  let turnPtr = 0; // index into getTurnOrderIds()
+
+  // Colors (9 swatches)
+  const GROUP_COLORS = [
+    { base: '#f28b82', member: '#f7a199', text: '#222' }, // red
+    { base: '#ff9800', member: '#ffb74d', text: '#222' }, // orange
+    { base: '#fff176', member: '#fff59d', text: '#222' }, // yellow
+    { base: '#81c995', member: '#a5d6a7', text: '#222' }, // green
+    { base: '#64b5f6', member: '#90caf9', text: '#222' }, // blue
+    { base: '#f48fb1', member: '#f8bbd0', text: '#222' }, // pink
+    { base: '#ba68c8', member: '#ce93d8', text: '#222' }, // purple
+    { base: '#a1887f', member: '#bcaaa4', text: '#222' }, // brown
+    { base: '#9e9e9e', member: '#bdbdbd', text: '#222' }  // gray
+  ];
+  let _nextColorIdx = 0;
+
+  // ====== DOM ======
+  const $ = (s) => document.querySelector(s);
+  const combatantListBody     = $('#combatant-list-body');
+  const lockGroupSelectionBtn = $('#lockGroupSelectionBtn');
+  const trackerTable          = $('#tracker-table');
+
+  const addCombatantBtn = $('#addCombatantBtn');
+  const addGroupBtn     = $('#addGroupBtn');
+  const sortAscBtn      = $('#sort-init-asc');
+  const sortDescBtn     = $('#sort-init-desc');
+  const prevTurnBtn     = $('#prevTurnBtn');
+  const nextTurnBtn     = $('#nextTurnBtn');
+
+  const roundCounterEl  = $('#roundCounter');
+  const currentTurnEl   = $('#currentTurnDisplay');
+
+  // ====== HELPERS ======
+  const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+
+  function forEachItem(cb) {
+    for (const item of combatants) {
+      if (item.type === 'combatant') cb(item);
+      if (item.type === 'group') {
+        cb(item);
+        (item.members || []).forEach(cb);
+      }
+    }
+  }
+  function isNameTaken(name, excludeId = null) {
+    const t = String(name || '').trim().toLowerCase();
+    if (!t) return false;
+    let taken = false;
+    forEachItem((it) => {
+      if (it.id === excludeId) return;
+      const n = String(it.name || '').trim().toLowerCase();
+      if (n && n === t) taken = true;
+    });
+    return taken;
+  }
+  function collectAllNamesLower() {
+    const set = new Set();
+    forEachItem((it) => { const n = (it.name || '').trim().toLowerCase(); if (n) set.add(n); });
+    return set;
+  }
+  function generateUniqueName(base = 'Combatant') {
+    const names = collectAllNamesLower();
+    const b = String(base).trim() || 'Item';
+    const lb = b.toLowerCase();
+    if (!names.has(lb)) return b;
+    let i = 2;
+    while (names.has(`${lb} ${i}`)) i++;
+    return `${b} ${i}`;
+  }
+
+  function findEntity(id, parent = null, list = combatants) {
+    for (const item of list) {
+      if (item.id === id) return { item, parent, list };
+      if (item.type === 'group' && item.members) {
+        const found = findEntity(id, item, item.members);
+        if (found.item) return found;
+      }
+    }
+    return { item: null, parent: null, list: null };
+  }
+  function allGroups() { return combatants.filter(c => c.type === 'group'); }
+  function countAllCombatants() {
+    let n = 0;
+    for (const i of combatants) {
+      if (i.type === 'combatant') n++;
+      if (i.type === 'group') n += (i.members?.length || 0);
+    }
+    return n;
+  }
+
+  function ensureGroupColorIdx(g) {
+    if (typeof g.colorIdx === 'number') return g.colorIdx;
+    const idx = _nextColorIdx % GROUP_COLORS.length;
+    _nextColorIdx++;
+    g.colorIdx = idx;
+    return idx;
+  }
+
+  // ====== TURNS/Rounds ======
+  function getTurnOrderIds() {
+    const ids = [];
+    combatants.forEach(item => {
+      if (item.type === 'combatant') ids.push(item.id);
+      else if (item.type === 'group') (item.members || []).forEach(m => ids.push(m.id));
+    });
+    return ids;
+  }
+  function clampTurnPtr() {
+    const order = getTurnOrderIds();
+    if (order.length === 0) { turnPtr = 0; return; }
+    if (turnPtr < 0) turnPtr = 0;
+    if (turnPtr >= order.length) turnPtr = order.length - 1;
+  }
+  function setRoundDisplay() {
+    if (roundCounterEl) roundCounterEl.textContent = `Round: ${currentRound}`;
+  }
+  function setCurrentTurnDisplay() {
+    const order = getTurnOrderIds();
+    const id = order[turnPtr];
+    let name = 'None';
+    if (id) {
+      const found = findEntity(id).item;
+      if (found) name = found.name || 'Combatant';
+    }
+    if (currentTurnEl) currentTurnEl.innerHTML = `🟢 Current Turn: <strong>${name}</strong>`;
+  }
+  function nextTurn() {
+    const order = getTurnOrderIds();
+    if (order.length === 0) return;
+    turnPtr++;
+    if (turnPtr >= order.length) {
+      turnPtr = 0;
+      currentRound += 1;
+    }
+    notify();
+  }
+  function prevTurn() {
+    const order = getTurnOrderIds();
+    if (order.length === 0) return;
+    turnPtr--;
+    if (turnPtr < 0) {
+      turnPtr = Math.max(0, order.length - 1);
+      if (currentRound > 1) currentRound -= 1;
+    }
+    notify();
+  }
+
+  // ====== CONDITIONS ======
+  const CONDITION_LIST = [
+    'Blinded','Charmed','Deafened','Frightened','Grappled','Incapacitated',
+    'Invisible','Paralyzed','Petrified','Poisoned','Prone','Restrained',
+    'Stunned','Unconscious','Concentrating'
+  ];
+  function ensureConditionsArray(c) { if (!Array.isArray(c.conditions)) c.conditions = []; return c.conditions; }
+  function isConditionActive(cond, round) {
+    return round >= cond.startRound && round <= cond.endRound;
+  }
+  function addConditionToCombatant(id, name, durationRounds = 1, note = '') {
+    const { item } = findEntity(id);
+    if (!item || item.type !== 'combatant') return false;
+    const dur = Math.max(1, parseInt(durationRounds, 10) || 1);
+    ensureConditionsArray(item).push({
+      id: `cond_${uid()}`,
+      name: String(name || '').trim() || 'Condition',
+      note: String(note || ''),
+      startRound: currentRound,
+      endRound: currentRound + dur - 1 // inclusive
+    });
+    notify(); return true;
+  }
+  function removeCondition(id, condId) {
+    const { item } = findEntity(id);
+    if (!item || item.type !== 'combatant') return false;
+    item.conditions = (item.conditions || []).filter(c => c.id !== condId);
+    notify(); return true;
+  }
+
+  // ====== MUTATIONS ======
+  function addDefaultCombatant() {
+    const name = generateUniqueName(`Combatant ${countAllCombatants() + 1}`);
+    const c = {
+      id: uid(),
+      type: 'combatant',
+      name,
+      init: 10, ac: 10, hp: 10, maxHp: 10, tempHp: 0,
+      role: 'dm', imageUrl: '', dashboardId: null,
+      conditions: []
+    };
+    combatants.push(c);
+    notify();
+  }
+  function addGroupByName(name) {
+    const safe = generateUniqueName(name || 'New Group');
+    const colorIdx = _nextColorIdx % GROUP_COLORS.length; _nextColorIdx++;
+    const group = { id: uid(), type: 'group', name: safe, init: undefined, members: [], colorIdx };
+    combatants.push(group);
+    notify();
+    return group;
+  }
+  function updateCombatant(id, patch) {
+    const { item } = findEntity(id);
+    if (!item || item.type !== 'combatant') return false;
+    if ('name' in patch) {
+      const proposed = String(patch.name || '').trim();
+      if (!proposed) return false;
+      if (isNameTaken(proposed, id)) return false;
+    }
+    Object.assign(item, patch); notify(); return true;
+  }
+  function updateGroup(id, patch) {
+    const { item } = findEntity(id);
+    if (!item || item.type !== 'group') return false;
+    if ('name' in patch) {
+      const proposed = String(patch.name || '').trim();
+      if (!proposed) return false;
+      if (isNameTaken(proposed, id)) return false;
+    }
+    if ('init' in patch && patch.init !== undefined) {
+      const p = Number(patch.init);
+      patch.init = Number.isFinite(p) ? p : undefined;
+    }
+    Object.assign(item, patch); notify(); return true;
+  }
+
+  function removeSelectedEverywhereCollect() {
+    const collected = [];
+    combatants = combatants.filter(item => {
+      if (item.type === 'combatant' && selectedCombatantIds.has(item.id)) {
+        collected.push(item); return false;
+      }
+      return true;
+    });
+    combatants.forEach(group => {
+      if (group.type === 'group') {
+        group.members = group.members.filter(m => {
+          if (selectedCombatantIds.has(m.id)) { collected.push(m); return false; }
+          return true;
+        });
+      }
+    });
+    return collected;
+  }
+  function moveSelectedToGroup(targetGroupId) {
+    if (selectedCombatantIds.size === 0) return false;
+    const { item: targetGroup } = findEntity(targetGroupId);
+    if (!targetGroup || targetGroup.type !== 'group') return false;
+    const moving = removeSelectedEverywhereCollect();
+    if (!moving.length) return false;
+    targetGroup.members.push(...moving);
+    selectedCombatantIds.clear();
+    notify(); return true;
+  }
+  function ungroupSelected() {
+    const toUngroup = [];
+    combatants.forEach(g => {
+      if (g.type === 'group') {
+        g.members = g.members.filter(m => {
+          if (selectedCombatantIds.has(m.id)) { toUngroup.push(m); return false; }
+          return true;
+        });
+      }
+    });
+    if (toUngroup.length) {
+      combatants.push(...toUngroup);
+      selectedCombatantIds.clear();
+      notify();
+    }
+  }
+  function deleteSelected() {
+    combatants = combatants.filter(c => !(c.type === 'combatant' && selectedCombatantIds.has(c.id)));
+    combatants.forEach(g => {
+      if (g.type === 'group') g.members = g.members.filter(m => !selectedCombatantIds.has(m.id));
+    });
+    selectedCombatantIds.clear();
+    notify();
+  }
+  // Remove one thing by id (combatant OR whole group)
+  function removeEntity(id) {
+    // top-level combatant
+    const before = combatants.length;
+    combatants = combatants.filter(x => !(x.type === 'combatant' && x.id === id));
+    if (combatants.length !== before) { notify(); return true; }
+    // whole group
+    const beforeG = combatants.length;
+    combatants = combatants.filter(x => !(x.type === 'group' && x.id === id));
+    if (combatants.length !== beforeG) { notify(); return true; }
+    // a member inside groups
+    let removed = false;
+    combatants.forEach(g => {
+      if (g.type !== 'group') return;
+      const len = g.members?.length || 0;
+      g.members = (g.members || []).filter(m => m.id !== id);
+      if ((g.members?.length || 0) !== len) removed = true;
+    });
+    if (removed) { notify(); return true; }
+    return false;
+  }
+
+  // ====== GROUP COLOR ======
+  function setGroupColorIdx(groupId, idx) {
+    const { item } = findEntity(groupId);
+    if (!item || item.type !== 'group') return false;
+    const max = GROUP_COLORS.length;
+    const n = Math.max(0, Math.min(max - 1, Number(idx) || 0));
+    item.colorIdx = n;
+    notify(); return true;
+  }
+
+  // ====== HP (Damage/Heal) ======
+  function applyDamageHeal(ids, { damage = 0, heal = 0 } = {}) {
+    const deltaD = Number(damage) || 0;
+    const deltaH = Number(heal) || 0;
+    if (!ids || !ids.size) return false;
+
+    ids.forEach(id => {
+      const { item } = findEntity(id);
+      if (!item || item.type !== 'combatant') return;
+      let hp = Number(item.hp) || 0;
+      let maxHp = Number(item.maxHp) || 0;
+      let temp = Number(item.tempHp) || 0;
+
+      if (deltaD > 0) {
+        // soak with temp hp first
+        const useTemp = Math.min(temp, deltaD);
+        temp -= useTemp;
+        let left = deltaD - useTemp;
+        hp = Math.max(0, hp - left);
+      }
+      if (deltaH > 0) {
+        hp = Math.min(maxHp, hp + deltaH);
+      }
+      item.hp = hp;
+      item.tempHp = temp;
+    });
+    notify(); return true;
+  }
+
+  // ====== NOTIFY / SNAPSHOT ======
+  const listeners = new Set();
+  function getSnapshot() {
+    return {
+      combatants,
+      selectedCombatantIds,
+      isLocked,
+      currentRound,
+      turnPtr,
+      GROUP_COLORS
+    };
+  }
+  function notify() {
+    clampTurnPtr();
+    // UI header
+    setRoundDisplay();
+    setCurrentTurnDisplay();
+    render();
+    // external subscribers (bulk UI, autosave, etc.)
+    listeners.forEach(fn => fn(getSnapshot()));
+    // autosave hook if present
+    window.scheduleAutosave?.();
+  }
+
+  // ====== RENDER ======
+  function groupDisplayInit(group) {
+    return Number.isFinite(group?.init) ? String(group.init) : '—';
+  }
+  function condChipsHTML(c) {
+    const list = Array.isArray(c.conditions) ? c.conditions : [];
+    const active = list.filter(cond => isConditionActive(cond, currentRound));
+    if (!active.length) return '<div class="cond-list"></div>';
+    return `<div class="cond-list">` + active.map(cond => {
+      const remaining = cond.endRound - currentRound + 1;
+      const safeName = (cond.name || '').replace(/"/g, '&quot;');
+      // Tooltip text from ConditionsCatalog, if available
+      const desc = (window.ConditionsCatalog?.get?.(cond.name)?.desc || []).join('\n');
+      const title = desc ? ` title="${desc.replace(/"/g,'&quot;')}"` : '';
+      return `<span class="condition-chip" data-cond-id="${cond.id}" data-cond-name="${safeName}"${title}>
+                ${cond.name} (${Math.max(0, remaining)}r)
+                <span class="x" title="Remove" data-remove-cond="1" data-cond-id="${cond.id}">×</span>
+              </span>`;
+    }).join('') + `</div>`;
+  }
+
+  // color swatch popover
+  let _colorPopover = null;
+  function closeColorPopover() {
+    if (_colorPopover) { _colorPopover.remove(); _colorPopover = null; }
+    document.removeEventListener('keydown', onColorEsc);
+    document.removeEventListener('click', onColorDocClick, true);
+  }
+  const onColorEsc = (e) => { if (e.key === 'Escape') closeColorPopover(); };
+  const onColorDocClick = (e) => {
+    if (!_colorPopover) return;
+    if (e.target.closest('.color-popover')) return;
+    if (e.target.closest('.group-color-swatch')) return;
+    closeColorPopover();
+  };
+  function openColorPopover(anchorBtn, groupId, currentIdx) {
+    closeColorPopover();
+    const colors = GROUP_COLORS;
+    const pop = document.createElement('div');
+    pop.className = 'color-popover';
+    Object.assign(pop.style, {
+      position: 'fixed', zIndex: 1000, background: 'rgba(255,255,255,.98)',
+      border: '1px solid rgba(0,0,0,.12)', borderRadius: '10px',
+      boxShadow: '0 10px 30px rgba(0,0,0,.15)', padding: '8px', minWidth: '140px', color: '#222'
+    });
+    const grid = document.createElement('div');
+    Object.assign(grid.style, { display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'8px' });
+    colors.forEach((scheme, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'color-dot';
+      Object.assign(b.style, {
+        width: '28px', height: '28px', borderRadius: '50%',
+        border: i === currentIdx ? '2px solid #333' : '1px solid #0002',
+        background: scheme.base, cursor: 'pointer'
+      });
+      b.dataset.idx = String(i);
+      b.title = `Set color ${i+1}`;
+      b.addEventListener('click', () => {
+        setGroupColorIdx(groupId, parseInt(b.dataset.idx,10) || 0);
+        closeColorPopover();
+      });
+      grid.appendChild(b);
+    });
+    pop.appendChild(grid);
+    document.body.appendChild(pop);
+    _colorPopover = pop;
+
+    const rect = anchorBtn.getBoundingClientRect();
+    const margin = 6;
+    const belowTop = rect.bottom + margin;
+    const left = Math.min(window.innerWidth - pop.offsetWidth - 8, Math.max(8, rect.left));
+    const top  = (belowTop + 160 < window.innerHeight) ? belowTop : Math.max(8, rect.top - margin - pop.offsetHeight);
+    pop.style.left = `${left}px`;
+    pop.style.top  = `${top}px`;
+
+    document.addEventListener('keydown', onColorEsc);
+    document.addEventListener('click', onColorDocClick, true);
+  }
+  function swatchButtonHTML(groupId, bg) {
+    const size = 22;
+    return `
+      <button class="group-color-swatch" title="Change color"
+              data-group-id="${groupId}"
+              style="width:${size}px;height:${size}px;border-radius:50%;
+                     background:${bg};border:1px solid #0002;display:inline-block;">
+      </button>`;
+  }
+
+  function render() {
+    if (!combatantListBody) return;
+    combatantListBody.innerHTML = '';
+
+    const order = getTurnOrderIds();
+    const curId = order[turnPtr] || null;
+
+    // Group row
+    const paintGroup = (g) => {
+      const idx = ensureGroupColorIdx(g);
+      const scheme = GROUP_COLORS[idx % GROUP_COLORS.length];
+
+      const row = document.createElement('div');
+      row.className = 'group-row';
+      row.dataset.id = g.id;
+      row.dataset.type = 'group';
+      row.style.backgroundColor = scheme.base;
+      row.style.color = scheme.text;
+      row.innerHTML = `
+        <div class="cell select-cell"></div>
+        <div class="cell image-cell">
+          <img src="images/folder.png" alt="Group Folder" class="group-folder-img">
+        </div>
+        <div class="cell init-cell">
+          <span class="editable-int" data-type="group" data-id="${g.id}" data-field="init">${groupDisplayInit(g)}</span>
+        </div>
+        <div class="cell name-cell">
+          <span class="editable-text" data-type="group" data-id="${g.id}" data-field="name">${g.name}</span>
+        </div>
+        <div class="cell ac-cell"></div>
+        <div class="cell hp-cell"></div>
+        <div class="cell temp-hp-cell"></div>
+        <div class="cell status-cell"></div>
+        <div class="cell role-cell"></div>
+        <div class="cell actions-cell">
+          <div class="btn-group">
+            ${swatchButtonHTML(g.id, scheme.base)}
+            <button class="row-del" data-type="group" data-id="${g.id}" title="Delete group">🗑️</button>
+          </div>
+        </div>
+        <div class="cell dashboard-link-cell"></div>
+      `;
+      combatantListBody.appendChild(row);
+
+      (g.members || []).forEach(m => paintCombatant(m, true, scheme));
+    };
+
+    // Combatant row
+    const paintCombatant = (c, inGroup = false, scheme = null) => {
+      const isSelected = selectedCombatantIds.has(c.id);
+      const isCurrent  = curId === c.id;
+
+      const row = document.createElement('div');
+      row.className = `tracker-table-row ${inGroup ? 'in-group' : ''} ${isSelected ? 'selected' : ''} ${isCurrent ? 'current-turn' : ''}`;
+      row.dataset.id = c.id;
+      row.dataset.type = 'combatant';
+
+      if (inGroup && scheme) {
+        row.style.backgroundColor = scheme.member;
+        row.style.color = scheme.text;
+      }
+
+      row.innerHTML = `
+        <div class="cell select-cell">
+          <input type="checkbox" class="combatant-checkbox" data-id="${c.id}" ${isSelected ? 'checked' : ''}>
+        </div>
+        <div class="cell image-cell">
+          <img class="editable-img" data-type="combatant" data-id="${c.id}" src="${c.imageUrl || 'images/icon.png'}" alt="${c.name}">
+        </div>
+        <div class="cell init-cell">
+          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="init">${c.init}</span>
+        </div>
+        <div class="cell name-cell">
+          <span class="editable-text" data-type="combatant" data-id="${c.id}" data-field="name">${c.name}</span>
+        </div>
+        <div class="cell ac-cell">
+          <span class="ac-shield">🛡️</span>
+          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="ac">${c.ac}</span>
+        </div>
+        <div class="cell hp-cell" data-id="${c.id}">
+          <span class="hp-heart">❤️</span>
+          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="hp">${c.hp}</span>
+          <span> / </span>
+          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="maxHp">${c.maxHp}</span>
+        </div>
+        <div class="cell temp-hp-cell">
+          <span class="temp-icon">✨</span>
+          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="tempHp">${c.tempHp || 0}</span>
+        </div>
+        <div class="cell status-cell">
+          ${condChipsHTML(c)}
+          <button class="btn btn-add-status" data-id="${c.id}">+ Add</button>
+        </div>
+        <div class="cell role-cell">${c.role?.toUpperCase?.() || ''}</div>
+        <div class="cell actions-cell">
+          <div class="btn-group">
+            <button class="row-del" data-type="combatant" data-id="${c.id}" title="Delete combatant">🗑️</button>
+          </div>
+        </div>
+        <div class="cell dashboard-link-cell"><button title="Toggle Dashboard">📄</button></div>
+      `;
+      combatantListBody.appendChild(row);
+    };
+
+    // Paint
+    combatants.forEach(item => {
+      if (item.type === 'group') paintGroup(item);
+      else paintCombatant(item, false, null);
+    });
+
+    // Lock styling
+    trackerTable?.classList.toggle('selection-locked', isLocked);
+  }
+
+  // ====== INLINE EDIT ======
+  function activateInlineEdit(spanEl, { intOnly = false } = {}) {
+    const type  = spanEl.dataset.type;
+    const id    = spanEl.dataset.id;
+    const field = spanEl.dataset.field;
+    const old   = spanEl.textContent.trim();
+
+    const input = document.createElement('input');
+    input.type  = 'text';
+    input.value = old;
+    input.className = 'inline-editor';
+    input.setAttribute('inputmode', intOnly ? 'numeric' : 'text');
+
+    input.dataset.type = type;
+    input.dataset.id = id;
+    input.dataset.field = field;
+    input.dataset.intOnly = String(!!intOnly);
+    input._origSpan = spanEl;
+
+    spanEl.replaceWith(input);
+    input.focus();
+    input.select();
+
+    const commit = () => {
+      let val = String(input.value ?? '').trim();
+      if (field === 'name' && !val) { input.replaceWith(spanEl); return; }
+      if (intOnly) {
+        const parsed = parseInt(val, 10);
+        if (!Number.isFinite(parsed)) { input.replaceWith(spanEl); return; }
+        val = parsed;
+      }
+      spanEl.textContent = String(val);
+      input.replaceWith(spanEl);
+      if (type === 'combatant') updateCombatant(id, { [field]: val });
+      else updateGroup(id, { [field]: val });
+    };
+    const cancel = () => { input.replaceWith(spanEl); };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(); }
+      else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+    });
+    input.addEventListener('blur', commit, { once: true });
+  }
+
+  // image picker
+  let _picker = null;
+  function getImagePicker() {
+    if (_picker) return _picker;
+    _picker = document.createElement('input');
+    _picker.type = 'file'; _picker.accept = 'image/*'; _picker.style.display = 'none';
+    document.body.appendChild(_picker);
+    return _picker;
+  }
+
+  // condition popover
+  let _condPopover = null;
+  function closeConditionPopover() {
+    if (_condPopover) { _condPopover.remove(); _condPopover = null; }
+    document.removeEventListener('keydown', onCondEsc);
+    document.removeEventListener('click', onCondDocClick, true);
+  }
+  const onCondEsc = (e) => { if (e.key === 'Escape') closeConditionPopover(); };
+  const onCondDocClick = (e) => {
+    if (!_condPopover) return;
+    if (e.target.closest('.cond-popover')) return;
+    if (e.target.closest('.btn-add-status')) return;
+    closeConditionPopover();
+  };
+  function openConditionPopover(anchorBtn, id) {
+    closeConditionPopover();
+    const pop = document.createElement('div');
+    pop.className = 'cond-popover';
+    Object.assign(pop.style, {
+      position: 'fixed', zIndex: 1000, background: 'rgba(255,255,255,.98)',
+      border: '1px solid rgba(0,0,0,.12)', borderRadius: '10px',
+      boxShadow: '0 10px 30px rgba(0,0,0,.15)', padding: '10px', minWidth: '280px', color: '#222'
+    });
+
+    const list = (window.ConditionsCatalog?.list && window.ConditionsCatalog.list.length)
+      ? window.ConditionsCatalog.list
+      : CONDITION_LIST;
+
+    pop.innerHTML = `
+      <div class="row" style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;">
+        <label style="min-width:82px;">Condition</label>
+        <select id="condSelect" style="flex:1;padding:.25rem .4rem;">
+          ${list.map(n => `<option value="${n}">${n}</option>`).join('')}
+        </select>
+      </div>
+      <div class="row" style="display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem;">
+        <label style="min-width:82px;">Duration</label>
+        <input id="condDur" type="number" min="1" step="1" value="2" style="width:5rem;padding:.25rem .4rem;">
+        <span>rounds</span>
+      </div>
+      <div class="actions" style="display:flex;gap:.5rem;justify-content:flex-end;">
+        <button class="btn btn-secondary" data-act="cancel">Cancel</button>
+        <button class="btn" data-act="add">Add</button>
+      </div>`;
+    document.body.appendChild(pop);
+    _condPopover = pop;
+
+    const rect = anchorBtn.getBoundingClientRect();
+    const margin = 6;
+    const belowTop = rect.bottom + margin;
+    const left = Math.min(window.innerWidth - pop.offsetWidth - 8, Math.max(8, rect.left));
+    const top  = (belowTop + 200 < window.innerHeight) ? belowTop : Math.max(8, rect.top - margin - pop.offsetHeight);
+    pop.style.left = `${left}px`; pop.style.top = `${top}px`;
+
+    pop.addEventListener('click', (e) => {
+      const act = e.target.closest('button')?.dataset?.act;
+      if (!act) return;
+      if (act === 'cancel') { closeConditionPopover(); return; }
+      if (act === 'add') {
+        const name = pop.querySelector('#condSelect').value;
+        const dur  = Math.max(1, parseInt(pop.querySelector('#condDur').value || '1', 10) || 1);
+        addConditionToCombatant(id, name, dur);
+        closeConditionPopover();
+      }
+    });
+
+    document.addEventListener('keydown', onCondEsc);
+    document.addEventListener('click', onCondDocClick, true);
+  }
+
+  // ====== EVENTS (delegated) ======
+  // header buttons
+  addCombatantBtn?.addEventListener('click', () => addDefaultCombatant());
+  addGroupBtn?.addEventListener('click', () => addGroupByName(`New Group ${allGroups().length + 1}`));
+  sortAscBtn?.addEventListener('click', () => sortByInit('asc'));
+  sortDescBtn?.addEventListener('click', () => sortByInit('desc'));
+  nextTurnBtn?.addEventListener('click', () => nextTurn());
+  prevTurnBtn?.addEventListener('click', () => prevTurn());
+
+  lockGroupSelectionBtn?.addEventListener('click', () => {
+    isLocked = !isLocked;
+    lockGroupSelectionBtn.innerHTML = isLocked
+      ? `🔓 <span class="label">Unlock Groups</span>`
+      : `🔒 <span class="label">Lock Groups</span>`;
+    trackerTable?.classList.toggle('selection-locked', isLocked);
+    notify();
+  });
+
+  // table delegate
+  combatantListBody?.addEventListener('click', (e) => {
+    // selection
+    const cb = e.target.closest('.combatant-checkbox');
+    if (cb) {
+      if (isLocked) { e.preventDefault(); return; }
+      const id = cb.dataset.id;
+      if (cb.checked) selectedCombatantIds.add(id); else selectedCombatantIds.delete(id);
+      notify();
+      return;
+    }
+
+    // delete row
+    const del = e.target.closest('.row-del');
+    if (del) {
+      const id = del.dataset.id;
+      const type = del.dataset.type || 'combatant';
+      const label = type === 'group' ? 'this group and all its members' : 'this combatant';
+      if (!id) return;
+      if (!confirm(`Delete ${label}?`)) return;
+      removeEntity(id);
+      return;
+    }
+
+    // color swatch
+    const swatch = e.target.closest('.group-color-swatch');
+    if (swatch) {
+      const gid = swatch.getAttribute('data-group-id');
+      const g = combatants.find(x => x.type === 'group' && x.id === gid);
+      const idx = g ? (g.colorIdx ?? ensureGroupColorIdx(g)) : 0;
+      openColorPopover(swatch, gid, idx);
+      return;
+    }
+
+    // remove condition
+    const xBtn = e.target.closest('[data-remove-cond="1"]');
+    if (xBtn) {
+      const row = xBtn.closest('.tracker-table-row');
+      const id = row?.dataset?.id;
+      const condId = xBtn.dataset.condId;
+      if (id && condId) removeCondition(id, condId);
+      return;
+    }
+
+    // add condition
+    const addBtn = e.target.closest('.btn-add-status');
+    if (addBtn) {
+      const id = addBtn.dataset.id;
+      openConditionPopover(addBtn, id);
+      return;
+    }
+
+    // image picker
+    const img = e.target.closest('.editable-img');
+    if (img) {
+      const id = img.dataset.id;
+      const inp = getImagePicker();
+      inp.onchange = () => {
+        const file = inp.files?.[0]; if (!file) return;
+        const r = new FileReader();
+        r.onload = () => { updateCombatant(id, { imageUrl: r.result }); inp.value = ''; };
+        r.readAsDataURL(file);
+      };
+      inp.click();
+      return;
+    }
+
+    // inline text/int
+    const nameSpan = e.target.closest('.editable-text');
+    if (nameSpan) { activateInlineEdit(nameSpan, { intOnly: false }); return; }
+    const intSpan = e.target.closest('.editable-int');
+    if (intSpan) { activateInlineEdit(intSpan, { intOnly: true }); return; }
+  });
+
+  // ====== SORTING ======
+  function splitNameForSort(name) {
+    const trimmed = String(name || '').trim();
+    const m = trimmed.match(/^(.*?)(?:\s+(\d+))?$/);
+    const base = (m?.[1] || '').toLowerCase();
+    const num = m?.[2] ? parseInt(m[2], 10) : null;
+    return { base, num };
+  }
+  function compareNames(aName, bName, alphaDir = 'asc') {
+    const A = splitNameForSort(aName);
+    const B = splitNameForSort(bName);
+    if (A.base !== B.base) return alphaDir === 'asc' ? A.base.localeCompare(B.base) : B.base.localeCompare(A.base);
+    const aNum = A.num == null ? Number.POSITIVE_INFINITY : A.num;
+    const bNum = B.num == null ? Number.POSITIVE_INFINITY : B.num;
+    if (aNum !== bNum) return aNum - bNum;
+    return String(aName || '').localeCompare(String(bName || ''));
+  }
+  function sortByInit(direction = 'desc') {
+    const dir = direction === 'asc' ? 'asc' : 'desc';
+    const alphaDir = dir === 'desc' ? 'asc' : 'desc';
+    const getInit = (item) => {
+      if (item.type === 'group') return Number.isFinite(item.init) ? item.init : Number.NEGATIVE_INFINITY;
+      return Number.isFinite(Number(item.init)) ? Number(item.init) : Number.NEGATIVE_INFINITY;
+    };
+    const getName = (item) => (item.name || '');
+
+    const currentOrderBefore = getTurnOrderIds();
+    const curId = currentOrderBefore[turnPtr];
+
+    combatants.sort((a, b) => {
+      const ai = getInit(a);
+      const bi = getInit(b);
+      if (ai !== bi) return dir === 'asc' ? ai - bi : bi - ai;
+      return compareNames(getName(a), getName(b), alphaDir);
+    });
+
+    notify();
+
+    if (curId) {
+      const newOrder = getTurnOrderIds();
+      const idx = newOrder.indexOf(curId);
+      if (idx >= 0) turnPtr = idx;
+    }
+  }
+
+  // ====== PUBLIC APIS ======
+  // Modern API (used by bulk UI variants)
+  window.CombatState = {
+    // observe
+    subscribe(fn) { listeners.add(fn); fn(getSnapshot()); return () => listeners.delete(fn); },
+    getSnapshot,
+    // selection / locking
+    isLocked: () => isLocked,
+    setLocked(v) { isLocked = !!v; notify(); },
+    getSelectedIds: () => new Set(selectedCombatantIds),
+    setSelectedIds(ids) { selectedCombatantIds = new Set(ids); notify(); },
+    clearSelection() { selectedCombatantIds.clear(); notify(); },
+    // data ops
+    addCombatant: addDefaultCombatant,
+    addGroupByName,
+    updateCombatant, updateGroup,
+    removeEntity,
+    deleteSelected,
+    moveSelectedToGroup, ungroupSelected,
+    setGroupColorIdx,
+    sortByInit,
+    // rounds / turns
+    getCurrentRound: () => currentRound,
+    nextTurn, prevTurn,
+    // conditions
+    addConditionToCombatant, removeCondition,
+    CONDITION_LIST, isConditionActive, ensureConditionsArray,
+    // HP
+    applyDamageHeal,
+    // persistence helpers
+    getSerializableState: () => ({ version: 1, combatants, currentRound, turnPtr }),
+    applyState(s) {
+      combatants = Array.isArray(s?.combatants) ? s.combatants : [];
+      currentRound = Number.isFinite(s?.currentRound) ? s.currentRound : 1;
+      turnPtr = Number.isFinite(s?.turnPtr) ? s.turnPtr : 0;
+      notify();
+    },
+    // expose colors
+    ensureGroupColorIdx,
+    getGroupColors: () => GROUP_COLORS,
+  };
+
+  // Back-compat API (some of your scripts call these names)
+  window.CombatAPI = {
+    getAllCombatants: () => combatants,
+    allGroups: () => allGroups(),
+    getAllGroups: () => allGroups(),
+    addGroupByName,
+    getSelectedIds: () => new Set(selectedCombatantIds),
+    setSelectedIds: (ids) => window.CombatState.setSelectedIds(ids),
+    clearSelection: () => window.CombatState.clearSelection(),
+    moveSelectedToGroup,
+    ungroupSelected,
+    deleteSelected,
+    removeEntity,
+    render: () => render(),
+    isLocked: () => isLocked,
+    addCombatant: addDefaultCombatant,
+    addGroup: addGroupByName,
+    sortByInit,
+    getCurrentRound: () => currentRound,
+    getCurrentTurnId: () => getTurnOrderIds()[turnPtr] || null,
+    nextTurn, prevTurn,
+    addConditionToCombatant, removeCondition,
+    setGroupColorIdx,
+    applyDamageHeal,
+  };
+
+  // ====== INIT ======
+  setRoundDisplay();
+  setCurrentTurnDisplay();
+  render();
+})();

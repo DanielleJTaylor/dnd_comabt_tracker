@@ -5,7 +5,6 @@
   let encounterId = null;
   let encounterName = 'Encounter';
 
-  // Toast helper
   function toast(msg, ms = 1200) {
     let el = document.getElementById('tracker-toast');
     if (!el) {
@@ -27,9 +26,10 @@
 
   function saveEncounter(manual=false) {
     if (!window.EncounterStore) { console.warn('EncounterStore missing'); return; }
-    if (manual && (!encounterId || !encounterName)) {
+    if (manual) {
       const n = prompt('Encounter name:', encounterName || 'Encounter');
       if (n && n.trim()) encounterName = n.trim();
+      else if (n === null) return; // User cancelled
     }
     const state = window.CombatState.getSerializableState();
     encounterId = window.EncounterStore.save({ id: encounterId, name: encounterName, state });
@@ -62,36 +62,23 @@
 
   function tryRestoreLastDraftOnce() {
     if (!window.EncounterStore) return;
-    const last = window.EncounterStore.getLastId();
-    if (!last) return;
-    const payload = window.EncounterStore.load(last);
+    const lastId = new URLSearchParams(window.location.search).get('encounterId') || window.EncounterStore.getLastId();
+    if (!lastId) return;
+    const payload = window.EncounterStore.load(lastId);
     if (payload) {
       encounterId   = payload.id;
       encounterName = payload.name || 'Encounter';
       window.CombatState.applyState(payload.state);
     }
   }
-
-  // Wire save/load buttons + delegated fallback
+  
   function wireButtons() {
-    const saveBtn = document.getElementById('saveEncounterBtn');
-    const loadBtn = document.getElementById('loadEncounterBtn');
-    saveBtn?.addEventListener('click', (e)=>{ e.preventDefault(); saveEncounter(true); });
-    loadBtn?.addEventListener('click', (e)=>{ e.preventDefault(); loadEncounterPrompt(); });
-
-    document.addEventListener('click', (e)=>{
-      if (e.target.closest('#saveEncounterBtn')) { e.preventDefault(); saveEncounter(true); }
-      if (e.target.closest('#loadEncounterBtn')) { e.preventDefault(); loadEncounterPrompt(); }
-    }, true);
+    document.getElementById('saveEncounterBtn')?.addEventListener('click', (e)=>{ e.preventDefault(); saveEncounter(true); });
+    document.getElementById('loadEncounterBtn')?.addEventListener('click', (e)=>{ e.preventDefault(); loadEncounterPrompt(); });
   }
 
-  // Subscribe to state to trigger autosave after renders
   window.CombatState.subscribe(() => scheduleAutosave());
-
-  // Expose for other modules if needed
   window.CombatPersist = { saveEncounter, loadEncounterPrompt, tryRestoreLastDraftOnce };
 
-  // init
   wireButtons();
-  tryRestoreLastDraftOnce();
 })();
