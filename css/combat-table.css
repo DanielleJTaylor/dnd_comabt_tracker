@@ -53,11 +53,9 @@
 }
 
 #combatant-list-body > .tracker-table-row {
-  background: #fff;
   border-bottom: 1px solid #e0e0e0;
   transition: background-color .2s ease;
 }
-#combatant-list-body > .tracker-table-row:hover { background:#f1f8ff; }
 
 /* Cell alignment */
 .cell{ display:flex; align-items:center; }
@@ -85,9 +83,7 @@
 /* Selection states */
 #combatant-list-body > .tracker-table-row.selected{ background:#e3f2fd !important; }
 #tracker-table.selection-locked .select-cell{ visibility:hidden; }
-#combatant-list-body > .tracker-table-row.current-turn{
-  background:#e8f5e9 !important; border-left:4px solid #4CAF50;
-}
+
 
 /* Readability sizing */
 #combatant-list-body > .tracker-table-row,
@@ -182,14 +178,26 @@
 .inline-editor:focus{ border-color:#7fb069; box-shadow:0 0 0 2px rgba(127,176,105,.25); }
 .name-cell .inline-editor{ max-width:220px; }
 
+/* Default background for top-level combatants */
+#combatant-list-body > .tracker-table-row:not(.in-group) {
+  background: #fff;
+}
+#combatant-list-body > .tracker-table-row:not(.in-group):hover {
+  background: #f1f8ff;
+}
 
+/* For group members, the background is set via an inline style in JS.
+   We just need a hover effect that darkens the existing color. */
+#combatant-list-body > .tracker-table-row.in-group:hover {
+  filter: brightness(0.95);
+}
 
-
-
-/* Highlight the current combatant’s row (not groups) */
-.tracker-table-row.current-turn {
-  outline: 2px solid #33c47a;
-  background: rgba(51,196,122,0.08);
+/* Current turn highlight: an outline that works on ANY row */
+#tracker-table .tracker-table-row.current-turn {
+  position: relative;
+  outline: 3px solid #4CAF50; /* A slightly thicker, more visible outline */
+  outline-offset: -2px;
+  z-index: 2; /* Ensure the outline is on top */
 }
 
 /* Simple condition chips */
@@ -229,4 +237,3 @@
   width: auto;      /* or omit */
   min-width: 1150px;
 }
-
