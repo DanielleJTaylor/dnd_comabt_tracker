@@ -2,25 +2,72 @@
 (() => {
   const $ = (s) => document.querySelector(s);
 
-  // HP state thresholds + icons (no exact HP shown)
+  // --- Helpers to mirror tracker timeline math -----------------------------
+  function getTurnOrderIdsFromSnapshot(snap) {
+    const ids = [];
+    (snap.combatants || []).forEach((it) => {
+      if (it.type === "combatant") ids.push(it.id);
+      else if (it.type === "group") (it.members || []).forEach((m) => ids.push(m.id));
+    });
+    return ids;
+  }
+
+  function condOwnerIdx(cond, snap) {
+    const order = getTurnOrderIdsFromSnapshot(snap);
+    return order.indexOf(cond.ownerId);
+  }
+
+  // How many of the owner's turns have STARTED since the application time?
+  function ownerTurnsSinceAdded(cond, snap) {
+    const { currentRound, turnPtr } = snap;
+    const ownerIdx = condOwnerIdx(cond, snap);
+    if (ownerIdx < 0) return 0;
+
+    const firstRound = cond.appliedAtRound + (cond.appliedAtPtr < ownerIdx ? 0 : 1);
+    if (currentRound < firstRound) return 0;
+
+    let n = currentRound - firstRound;
+    if (turnPtr >= ownerIdx) n += 1;
+    return n;
+  }
+
+  function remainingRoundsNow(cond, snap) {
+    // Back-compat legacy shape {startRound,endRound}
+    if (cond.durationRounds == null && cond.startRound != null && cond.endRound != null) {
+      const r = snap.currentRound || 1;
+      if (r < cond.startRound) return 0;
+      return Math.max(0, (cond.endRound - r + 1));
+    }
+    const used = ownerTurnsSinceAdded(cond, snap);
+    return Math.max(0, (cond.durationRounds ?? 0) - used);
+  }
+
+  function isConditionVisibleNow(cond, snap) {
+    const { currentRound, turnPtr } = snap;
+    if (currentRound < cond.appliedAtRound) return false;
+    if (currentRound === cond.appliedAtRound && turnPtr < cond.appliedAtPtr) return false;
+    return true;
+  }
+
+  function isConditionActiveNow(cond, snap) {
+    return isConditionVisibleNow(cond, snap) && remainingRoundsNow(cond, snap) > 0;
+  }
+
+  // --- HP state & icon (updated thresholds/emojis) -------------------------
   function hpStateAndIcon(hp, maxHp) {
     if (!Number.isFinite(hp) || !Number.isFinite(maxHp) || maxHp <= 0) {
       return { state: "Healthy", icon: "❤️" };
     }
-    if (hp <= 0) return { state: "Down", icon: "☠️" }; // we skip these in output
+    if (hp <= 0) return { state: "DEAD", icon: "☠️" };
+
     const pct = (hp / maxHp) * 100;
-    if (pct >= 76) return { state: "Healthy", icon: "❤️" };
-    if (pct >= 51) return { state: "Injured", icon: "💔" };
-    if (pct >= 26) return { state: "Bloodied", icon: "🩸" };
-    return { state: "Critical", icon: "☠️" };
+    if (pct < 15)      return { state: "Critical", icon: "🆘" };
+    if (pct <= 50)     return { state: "Bloodied", icon: "🩸" };
+    if (pct < 100)     return { state: "Injured",  icon: "🤕" };
+    return { state: "Healthy", icon: "❤️" };
   }
 
-  // Same logic as elsewhere for active conditions
-  function isConditionActive(cond, round) {
-    return round >= cond.startRound && round <= cond.endRound;
-  }
-
-  // Sort helpers (match your table’s tie breaking: init desc, then name)
+  // Natural-ish name sort (same tie-breaker as tracker)
   function splitNameForSort(name) {
     const t = String(name || "").trim();
     const m = t.match(/^(.*?)(?:\s+(\d+))?$/);
@@ -41,7 +88,7 @@
 
     const { combatants, currentRound } = snap;
 
-    // Flatten combatants with their group name, skip groups themselves
+    // Flatten combatants with their group name (keep everyone, alive or dead)
     const flat = [];
     combatants.forEach((it) => {
       if (it.type === "combatant") {
@@ -51,11 +98,8 @@
       }
     });
 
-    // Filter out anyone with hp <= 0 (do not show in initiative)
-    const alive = flat.filter(({ c }) => Number(c.hp) > 0);
-
-    // Sort by init DESC, then by name asc (natural-ish)
-    alive.sort((A, B) => {
+    // Sort by init DESC, then by name asc
+    flat.sort((A, B) => {
       const ai = Number.isFinite(+A.c.init) ? +A.c.init : Number.NEGATIVE_INFINITY;
       const bi = Number.isFinite(+B.c.init) ? +B.c.init : Number.NEGATIVE_INFINITY;
       if (ai !== bi) return bi - ai; // DESC
@@ -65,24 +109,23 @@
     const header = `**Initiative — Round ${currentRound || 1}**`;
     const lines = [header];
 
-    alive.forEach(({ c, groupName }) => {
+    flat.forEach(({ c, groupName }) => {
       const initNum = Number.isFinite(+c.init) ? +c.init : 0;
+      const nameBase = groupName ? `${c.name} (${groupName})` : c.name;
 
-      // Name with (Group) if any
-      const who = groupName ? `${c.name} (${groupName})` : c.name;
-
-      // HP state (icon + label), but no exact numbers
       const { state, icon } = hpStateAndIcon(Number(c.hp), Number(c.maxHp));
 
-      // Active conditions with remaining rounds
+      // Decorate dead names with **DEAD** on both sides
+      const who = (state === "DEAD")
+        ? `**DEAD** ${nameBase} **DEAD**`
+        : nameBase;
+
+      // Active conditions using timeline-aware logic + remaining rounds
       const list = Array.isArray(c.conditions) ? c.conditions : [];
-      const active = list.filter((cond) => isConditionActive(cond, currentRound || 1));
-      const conds = active.length
-        ? active
-            .map((cond) => {
-              const remain = Math.max(0, (cond.endRound ?? 0) - (currentRound || 1) + 1);
-              return `${cond.name} (${remain}r)`;
-            })
+      const activeConds = list.filter((cond) => isConditionActiveNow(cond, snap));
+      const conds = activeConds.length
+        ? activeConds
+            .map((cond) => `${cond.name} (${remainingRoundsNow(cond, snap)}r)`)
             .join(", ")
         : "None";
 

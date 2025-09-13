@@ -41,11 +41,25 @@
   // ====== HELPERS ======
   const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
-  // --- add near the top, with other helpers ---
   function escapeAttr(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
   function escapeHTML(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+  // UI icon for HP state (uses file icon for Bloodied)
+  function hpStateAsset(hp, maxHp) {
+    if (!Number.isFinite(hp) || !Number.isFinite(maxHp) || maxHp <= 0) {
+      return { state: "Healthy", html: '<span class="hp-emoji" title="Healthy">❤️</span>' };
+    }
+    if (hp <= 0) return { state: "DEAD", html: '<span class="hp-emoji" title="DEAD">☠️</span>' };
 
+    const pct = (hp / maxHp) * 100;
+    if (pct < 15)  return { state: "Critical", html: '<span class="hp-emoji" title="Critical">🆘</span>' };
+    if (pct <= 50) return {
+      state: "Bloodied",
+      html: '<img class="hp-icon" src="images/icons/bloodied.png" alt="Bloodied" title="Bloodied">'
+    };
+    if (pct < 100) return { state: "Injured",  html: '<span class="hp-emoji" title="Injured">🤕</span>' };
+    return { state: "Healthy", html: '<span class="hp-emoji" title="Healthy">❤️</span>' };
+  }
 
   function forEachItem(cb) {
     for (const item of combatants) {
@@ -101,7 +115,6 @@
     }
     return n;
   }
-
   function ensureGroupColorIdx(g) {
     if (typeof g.colorIdx === 'number') return g.colorIdx;
     const idx = _nextColorIdx % GROUP_COLORS.length;
@@ -165,20 +178,15 @@
     'Invisible','Paralyzed','Petrified','Poisoned','Prone','Restrained',
     'Stunned','Unconscious','Concentrating'
   ];
-
   function ensureConditionsArray(c) {
     if (!Array.isArray(c.conditions)) c.conditions = [];
     return c.conditions;
   }
-
   // Add a condition that "ticks" only at the start of the OWNER's turns.
-  // We store WHEN it was applied (round + turnPtr) and its duration in OWNER turns.
   function addConditionToCombatant(id, name, durationRounds = 1, note = '') {
     const { item } = findEntity(id);
     if (!item || item.type !== 'combatant') return false;
-
     const dur = Math.max(1, parseInt(durationRounds, 10) || 1);
-
     ensureConditionsArray(item).push({
       id: `cond_${uid()}`,
       ownerId: id,
@@ -191,43 +199,25 @@
     notify();
     return true;
   }
-
-  // Owner index in the CURRENT order
   function condOwnerIdx(cond) {
     const order = getTurnOrderIds();
     return order.indexOf(cond.ownerId);
   }
-
-  // Visible only if we've progressed to (or past) the moment it was applied
   function isConditionVisibleNow(cond) {
     if (currentRound < cond.appliedAtRound) return false;
     if (currentRound === cond.appliedAtRound && turnPtr < cond.appliedAtPtr) return false;
     return true;
   }
-
-  // How many of the owner's turns have STARTED since the application time?
   function ownerTurnsSinceAdded(cond) {
     const ownerIdx = condOwnerIdx(cond);
-    if (ownerIdx < 0) return 0; // owner missing from list
-
-    // First owner's turn AFTER the application moment:
-    // If applied before the owner in that round -> same round, else next round
+    if (ownerIdx < 0) return 0;
     const firstRound = cond.appliedAtRound + (cond.appliedAtPtr < ownerIdx ? 0 : 1);
-
     if (currentRound < firstRound) return 0;
-
-    // Completed owner turns in fully passed rounds:
     let n = currentRound - firstRound;
-
-    // Plus this round if we've reached/passed the owner's slot
     if (turnPtr >= ownerIdx) n += 1;
-
     return n;
   }
-
-  // Remaining rounds (owner-turns), never negative
   function remainingRounds(cond) {
-    // Back-compat: old saved shapes {startRound,endRound}
     if (cond.durationRounds == null && cond.startRound != null && cond.endRound != null) {
       if (currentRound < cond.startRound) return 0;
       return Math.max(0, (cond.endRound - currentRound + 1));
@@ -235,12 +225,9 @@
     const used = ownerTurnsSinceAdded(cond);
     return Math.max(0, (cond.durationRounds ?? 0) - used);
   }
-
   function isConditionActive(cond) {
     return isConditionVisibleNow(cond) && remainingRounds(cond) > 0;
   }
-
-  // Remove condition by explicit user action
   function removeCondition(id, condId) {
     const { item } = findEntity(id);
     if (!item || item.type !== 'combatant') return false;
@@ -295,7 +282,6 @@
     }
     Object.assign(item, patch); notify(); return true;
   }
-
   function removeSelectedEverywhereCollect() {
     const collected = [];
     combatants = combatants.filter(item => {
@@ -348,7 +334,6 @@
     selectedCombatantIds.clear();
     notify();
   }
-  // Remove one thing by id (combatant OR whole group)
   function removeEntity(id) {
     // top-level combatant
     const before = combatants.length;
@@ -394,7 +379,6 @@
       let temp = Number(item.tempHp) || 0;
 
       if (deltaD > 0) {
-        // soak with temp hp first
         const useTemp = Math.min(temp, deltaD);
         temp -= useTemp;
         let left = deltaD - useTemp;
@@ -421,33 +405,26 @@
       GROUP_COLORS
     };
   }
-
   function updateCurrentTurnHighlight() {
-    // Clear previous
     document
       .querySelectorAll('.tracker-table-row.current-turn, .group-row.current-turn')
       .forEach(el => el.classList.remove('current-turn'));
-
     const order = getTurnOrderIds();
     const activeId = order[turnPtr];
     if (!activeId) return;
-
     const row = document.querySelector(`[data-id="${activeId}"][data-type="combatant"]`);
     if (!row) return;
-
-    // If it’s in a group, outline the group header instead
     const groupRow = row.closest('.group-row');
     if (groupRow) groupRow.classList.add('current-turn');
     else row.classList.add('current-turn');
   }
-
   function notify() {
     clampTurnPtr();
     setRoundDisplay();
     setCurrentTurnDisplay();
     render();
     updateCurrentTurnHighlight();
-    updateStatusCellLayout();   // keep chips/button layout correct
+    updateStatusCellLayout();
     listeners.forEach(fn => fn(getSnapshot()));
     window.scheduleAutosave?.();
   }
@@ -457,21 +434,16 @@
     return Number.isFinite(group?.init) ? String(group.init) : '—';
   }
 
-  // (replace ONLY this function body)
+  // CONDITION CHIPS HTML
   function condChipsHTML(c) {
     const list = Array.isArray(c.conditions) ? c.conditions : [];
     const active = list.filter(isConditionActive);
     if (!active.length) return '<div class="cond-list"></div>';
-
     return `<div class="cond-list">` + active.map(cond => {
       const remain = remainingRounds(cond);
       const safeName = escapeAttr(cond.name || 'Condition');
-
-      // Pull description (array of lines) from the catalog
       const descLines = (window.ConditionsCatalog?.get?.(cond.name)?.desc || []);
-      const descText  = descLines.join('\n');            // keep as text; we’ll render with pre-line
-      const safeDesc  = escapeAttr(descText);
-
+      const safeDesc  = escapeAttr(descLines.join('\n'));
       return `<span class="condition-chip"
                     data-cond-id="${cond.id}"
                     data-cond-name="${safeName}"
@@ -540,7 +512,6 @@
     document.addEventListener('keydown', onColorEsc);
     document.addEventListener('click', onColorDocClick, true);
   }
-
   function swatchButtonHTML(groupId, bg) {
     const size = 22;
     return `
@@ -556,17 +527,12 @@
       </button>`;
   }
 
-  
-
-
-
   // ====== CONDITION CHIP TOOLTIP ======
   let _condTipEl = null;
   function ensureCondTip(){
     if (_condTipEl) return _condTipEl;
     const tip = document.createElement('div');
     tip.className = 'cond-tip';
-    // inline base styles; you can override in CSS too
     Object.assign(tip.style, {
       position: 'fixed',
       display: 'none',
@@ -596,7 +562,6 @@
   function positionCondTip(x, y){
     const tip = ensureCondTip();
     const margin = 14;
-    // place to the bottom-right of cursor, clamp to viewport
     tip.style.display = 'block';
     const w = tip.offsetWidth, h = tip.offsetHeight;
     const left = Math.min(window.innerWidth - w - 8, x + margin);
@@ -605,8 +570,6 @@
     tip.style.top  = top + 'px';
   }
   function hideCondTip(){ if (_condTipEl) _condTipEl.style.display = 'none'; }
-
-  // Delegated hover handlers
   combatantListBody?.addEventListener('mouseover', (e) => {
     const chip = e.target.closest('.condition-chip');
     if (!chip) return;
@@ -622,123 +585,85 @@
     if (from && !to) hideCondTip();
   });
 
-
-
-
-
-  function render() {
-    if (!combatantListBody) return;
-    combatantListBody.innerHTML = '';
-
-    const order = getTurnOrderIds();
-    const curId = order[turnPtr] || null;
-
-    // Group row
-    const paintGroup = (g) => {
-      const idx = ensureGroupColorIdx(g);
-      const scheme = GROUP_COLORS[idx % GROUP_COLORS.length];
-
-      const row = document.createElement('div');
-      row.className = 'group-row';
-      row.dataset.id = g.id;
-      row.dataset.type = 'group';
-      row.style.backgroundColor = scheme.base;
-      row.style.color = scheme.text;
-      row.innerHTML = `
-        <div class="cell select-cell"></div>
-        <div class="cell image-cell">
-          <img src="images/folder.png" alt="Group Folder" class="group-folder-img">
-        </div>
-        <div class="cell init-cell">
-          <span class="editable-int" data-type="group" data-id="${g.id}" data-field="init">${groupDisplayInit(g)}</span>
-        </div>
-        <div class="cell name-cell">
-          <span class="editable-text" data-type="group" data-id="${g.id}" data-field="name">${g.name}</span>
-        </div>
-        <div class="cell ac-cell"></div>
-        <div class="cell hp-cell"></div>
-        <div class="cell temp-hp-cell"></div>
-        <div class="cell status-cell"></div>
-        <div class="cell role-cell"></div>
-        <div class="cell actions-cell">
-          <div class="btn-group">
-            ${swatchButtonHTML(g.id, scheme.base)}
-            <button class="row-del" data-type="group" data-id="${g.id}" title="Delete group">🗑️</button>
-          </div>
-        </div>
-        <div class="cell dashboard-link-cell"></div>
-      `;
-      combatantListBody.appendChild(row);
-
-      (g.members || []).forEach(m => paintCombatant(m, true, scheme));
-    };
-
-    // Combatant row
-    const paintCombatant = (c, inGroup = false, scheme = null) => {
-      const isSelected = selectedCombatantIds.has(c.id);
-      const isCurrent  = curId === c.id;
-
-      const row = document.createElement('div');
-      row.className = `tracker-table-row ${inGroup ? 'in-group' : ''} ${isSelected ? 'selected' : ''} ${isCurrent ? 'current-turn' : ''}`;
-      row.dataset.id = c.id;
-      row.dataset.type = 'combatant';
-
-      if (inGroup && scheme) {
-        row.style.backgroundColor = scheme.member;
-        row.style.color = scheme.text;
-      }
-
-      row.innerHTML = `
-        <div class="cell select-cell">
-          <input type="checkbox" class="combatant-checkbox" data-id="${c.id}" ${isSelected ? 'checked' : ''}>
-        </div>
-        <div class="cell image-cell">
-          <img class="editable-img" data-type="combatant" data-id="${c.id}" src="${c.imageUrl || 'images/icon.png'}" alt="${c.name}">
-        </div>
-        <div class="cell init-cell">
-          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="init">${c.init}</span>
-        </div>
-        <div class="cell name-cell">
-          <span class="editable-text" data-type="combatant" data-id="${c.id}" data-field="name">${c.name}</span>
-        </div>
-        <div class="cell ac-cell">
-          <span class="ac-shield">🛡️</span>
-          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="ac">${c.ac}</span>
-        </div>
-        <div class="cell hp-cell" data-id="${c.id}">
-          <span class="hp-heart">❤️</span>
-          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="hp">${c.hp}</span>
-          <span> / </span>
-          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="maxHp">${c.maxHp}</span>
-        </div>
-        <div class="cell temp-hp-cell">
-          <span class="temp-icon">✨</span>
-          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="tempHp">${c.tempHp || 0}</span>
-        </div>
-        <div class="cell status-cell">
-          ${condChipsHTML(c)}
-          <button class="btn btn-add-status" data-id="${c.id}">+ Add</button>
-        </div>
-        <div class="cell role-cell">${c.role?.toUpperCase?.() || ''}</div>
-        <div class="cell actions-cell">
-          <div class="btn-group">
-            <button class="row-del" data-type="combatant" data-id="${c.id}" title="Delete combatant">🗑️</button>
-          </div>
-        </div>
-        <div class="cell dashboard-link-cell"><button title="Toggle Dashboard">📄</button></div>
-      `;
-      combatantListBody.appendChild(row);
-    };
-
-    // Paint
-    combatants.forEach(item => {
-      if (item.type === 'group') paintGroup(item);
-      else paintCombatant(item, false, null);
-    });
-
-    // Lock styling
-    trackerTable?.classList.toggle('selection-locked', isLocked);
+  // ====== SPELL SLOTS (inline panel under the row) ======
+  function ensureSpellData(c) {
+    if (!c.spellSlots) {
+      c.spellSlots = { isSpellcaster: true, slots: {} };
+      for (let L = 1; L <= 9; L++) c.spellSlots.slots[L] = { max: 0, used: 0 };
+    }
+    return c.spellSlots;
   }
+
+  function renderSlotsRows(c) {
+    const sd = ensureSpellData(c);
+    const rows = [];
+    for (let L = 1; L <= 9; L++) {
+      const { max, used } = sd.slots[L];
+      const left = Math.max(0, max - used);
+      rows.push(`
+        <div class="slot-row" data-level="${L}" style="display:flex;align-items:center;gap:.5rem;">
+          <div style="width:2.2rem;font-weight:700;">L${L}</div>
+          <button class="slot-dec" data-level="${L}" title="Spend one">−</button>
+          <span class="slot-count" data-level="${L}" style="min-width:60px;text-align:center;">${used}/${max}</span>
+          <button class="slot-inc" data-level="${L}" title="Recover one">+</button>
+
+          <div class="slot-pips" data-level="${L}" aria-label="${left} available, ${used} spent" style="flex:1;">
+            ${renderPips(sd, L)}
+          </div>
+
+          <div style="margin-left:.5rem;">Max</div>
+          <input class="slot-max" data-level="${L}" type="number" min="0" step="1" value="${max}" style="width:64px;padding:.25rem .4rem;">
+        </div>
+      `);
+    }
+    return rows.join('');
+  }
+
+
+  function buildSlotsInlineHTML(c) {
+    ensureSlotsStyles();  // <-- make sure pip styles exist
+    return `
+      <div class="slots-inline-inner" style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:8px;margin-top:6px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
+          <div style="font-weight:700;">🪄 Spell Slots — ${escapeHTML(c.name || 'Combatant')}</div>
+          <div style="display:flex;gap:.5rem;">
+            <button class="slots-longrest" title="Set used to 0 for all levels">Long Rest</button>
+            <button class="slots-close">Close</button>
+          </div>
+        </div>
+        <div class="slots-body" style="display:flex;flex-direction:column;gap:.35rem;">
+          ${renderSlotsRows(c)}
+        </div>
+      </div>
+    `;
+  }
+
+  // Inject minimal CSS once for the pips UI
+  function ensureSlotsStyles(){
+    if (document.getElementById('slots-pips-style')) return;
+    const el = document.createElement('style');
+    el.id = 'slots-pips-style';
+    el.textContent = `
+      .slots-inline .slot-row { gap:.5rem; }
+      .slots-inline .slot-pips{ display:flex; flex-wrap:wrap; gap:4px; align-items:center; margin-left:.5rem; }
+      .slots-inline .slot-pip{ width:14px; height:14px; border-radius:50%; box-sizing:border-box;
+                              border:2px solid currentColor; opacity:.35; }
+      .slots-inline .slot-pip.available{ background: currentColor; opacity: 1; }
+      .slots-inline .slot-pip.spent{ background: transparent; }
+    `;
+    document.head.appendChild(el);
+  }
+
+  // Build the pip dots for a given level
+  function renderPips(sd, level){
+    const { max, used } = sd.slots[level];
+    const left = Math.max(0, max - used);
+    const parts = [];
+    for (let i = 0; i < left; i++) parts.push('<span class="slot-pip available" title="Available"></span>');
+    for (let i = 0; i < used; i++) parts.push('<span class="slot-pip spent" title="Spent"></span>');
+    return parts.join('');
+  }
+
 
   // ====== STATUS-CELL LAYOUT (1-line until 3+ chips need wrapping) ======
   function updateStatusCellLayout() {
@@ -750,14 +675,12 @@
         if (!list) { cell.classList.remove('wrapped'); return; }
 
         const chips = list.querySelectorAll('.condition-chip');
-        // Always one-line for 0–2 chips
         if (chips.length < 3) { cell.classList.remove('wrapped'); return; }
 
-        // For 3+, wrap only when they can't fit next to the button
         const chipsTotalWidth = Array.from(chips).reduce((w, ch) => w + ch.offsetWidth, 0)
-                              + Math.max(0, chips.length - 1) * 4; // ~gap px
+                              + Math.max(0, chips.length - 1) * 4;
         const btnWidth = (btn?.offsetWidth || 0);
-        const available = cell.clientWidth - btnWidth - 8; // small fudge
+        const available = cell.clientWidth - btnWidth - 8;
 
         const needWrap = chipsTotalWidth > available;
         cell.classList.toggle('wrapped', needWrap);
@@ -819,7 +742,7 @@
     return _picker;
   }
 
-  // condition popover
+  // condition popover (for adding a condition)
   let _condPopover = null;
   function closeConditionPopover() {
     if (_condPopover) { _condPopover.remove(); _condPopover = null; }
@@ -959,6 +882,19 @@
       return;
     }
 
+    // spell slots button (toggle inline panel)
+    const spellBtn = e.target.closest('.btn-spellcaster');
+    if (spellBtn) {
+      const id = spellBtn.dataset.id;
+      const { item } = findEntity(id);
+      if (item && item.type === 'combatant') {
+        ensureSpellData(item);               // first time -> makes them a spellcaster
+        item._slotsOpen = !item._slotsOpen;  // remember open state
+        notify();                            // re-render row (panel appears below)
+      }
+      return;
+    }
+
     // image picker
     const img = e.target.closest('.editable-img');
     if (img) {
@@ -981,13 +917,93 @@
     if (intSpan) { activateInlineEdit(intSpan, { intOnly: true }); return; }
   });
 
+  // clicks inside inline slots panel
+  combatantListBody?.addEventListener('click', (e) => {
+    const slotsInline = e.target.closest('.slots-inline');
+    if (!slotsInline) return;
+
+    const ownerId = slotsInline.dataset.id;
+    const { item: c } = findEntity(ownerId);
+    if (!c) return;
+    const sd = ensureSpellData(c);
+
+    // + / −
+    if (e.target.classList.contains('slot-inc')) {
+      const L = parseInt(e.target.dataset.level || '0', 10);
+      if (L >= 1 && L <= 9) {
+        sd.slots[L].used = Math.max(0, sd.slots[L].used - 1);
+        syncSlotRow(slotsInline, L, sd);
+        notify();
+      }
+      return;
+    }
+    if (e.target.classList.contains('slot-dec')) {
+      const L = parseInt(e.target.dataset.level || '0', 10);
+      if (L >= 1 && L <= 9) {
+        sd.slots[L].used = Math.min(sd.slots[L].max, sd.slots[L].used + 1);
+        syncSlotRow(slotsInline, L, sd);
+        notify();
+      }
+      return;
+    }
+
+    // Long rest
+    if (e.target.classList.contains('slots-longrest')) {
+      for (let i = 1; i <= 9; i++) sd.slots[i].used = 0;
+      for (let i = 1; i <= 9; i++) syncSlotRow(slotsInline, i, sd);
+      notify();
+      return;
+    }
+
+    // Close (hide panel, keep state)
+    if (e.target.classList.contains('slots-close')) {
+      c._slotsOpen = false;
+      notify();
+      return;
+    }
+  });
+
+  // input changes for "Max" fields in slots
+  combatantListBody?.addEventListener('input', (e) => {
+    if (!e.target.classList.contains('slot-max')) return;
+    const container = e.target.closest('.slots-inline');
+    if (!container) return;
+
+    const ownerId = container.dataset.id;
+    const { item: c } = findEntity(ownerId);
+    if (!c) return;
+
+    const sd = ensureSpellData(c);
+    const L   = parseInt(e.target.dataset.level || '0', 10);
+    const val = Math.max(0, parseInt(e.target.value || '0', 10) || 0);
+
+    sd.slots[L].max  = val;
+    sd.slots[L].used = Math.min(sd.slots[L].used, val);
+    syncSlotRow(container, L, sd);
+    notify();
+  });
+
+  function syncSlotRow(container, level, sd) {
+    const count = container.querySelector(`.slot-count[data-level="${level}"]`);
+    if (count) count.textContent = `${sd.slots[level].used}/${sd.slots[level].max}`;
+
+    const pips = container.querySelector(`.slot-pips[data-level="${level}"]`);
+    if (pips) {
+      const { max, used } = sd.slots[level];
+      const left = Math.max(0, max - used);
+      pips.setAttribute('aria-label', `${left} available, ${used} spent`);
+      pips.innerHTML = renderPips(sd, level);
+    }
+  }
+
+
   // ====== SORTING ======
   function splitNameForSort(name) {
     const trimmed = String(name || '').trim();
     const m = trimmed.match(/^(.*?)(?:\s+(\d+))?$/);
     const base = (m?.[1] || '').toLowerCase();
-    theNum = m?.[2] ? parseInt(m[2], 10) : null;
-    return { base, num: theNum };
+    const num  = m?.[2] ? parseInt(m[2], 10) : null;   // block-scoped (no accidental globals)
+    return { base, num };
   }
   function compareNames(aName, bName, alphaDir = 'asc') {
     const A = splitNameForSort(aName);
@@ -1027,18 +1043,14 @@
   }
 
   // ====== PUBLIC APIS ======
-  // Modern API (used by bulk UI variants)
   window.CombatState = {
-    // observe
     subscribe(fn) { listeners.add(fn); fn(getSnapshot()); return () => listeners.delete(fn); },
     getSnapshot,
-    // selection / locking
     isLocked: () => isLocked,
     setLocked(v) { isLocked = !!v; notify(); },
     getSelectedIds: () => new Set(selectedCombatantIds),
     setSelectedIds(ids) { selectedCombatantIds = new Set(ids); notify(); },
     clearSelection() { selectedCombatantIds.clear(); notify(); },
-    // data ops
     addCombatant: addDefaultCombatant,
     addGroupByName,
     updateCombatant, updateGroup,
@@ -1047,15 +1059,11 @@
     moveSelectedToGroup, ungroupSelected,
     setGroupColorIdx,
     sortByInit,
-    // rounds / turns
     getCurrentRound: () => currentRound,
     nextTurn, prevTurn,
-    // conditions
     addConditionToCombatant, removeCondition,
     CONDITION_LIST, isConditionActive, ensureConditionsArray,
-    // HP
     applyDamageHeal,
-    // persistence helpers
     getSerializableState: () => ({ version: 1, combatants, currentRound, turnPtr }),
     applyState(s) {
       combatants = Array.isArray(s?.combatants) ? s.combatants : [];
@@ -1063,12 +1071,10 @@
       turnPtr = Number.isFinite(s?.turnPtr) ? s.turnPtr : 0;
       notify();
     },
-    // expose colors
     ensureGroupColorIdx,
     getGroupColors: () => GROUP_COLORS,
   };
 
-  // Back-compat API (some of your scripts call these names)
   window.CombatAPI = {
     getAllCombatants: () => combatants,
     allGroups: () => allGroups(),
@@ -1094,9 +1100,139 @@
     applyDamageHeal,
   };
 
+  // ====== MAIN RENDER ======
+  function render() {
+    if (!combatantListBody) return;
+    combatantListBody.innerHTML = '';
+
+    const order = getTurnOrderIds();
+    const curId = order[turnPtr] || null;
+
+    // Group row
+    const paintGroup = (g) => {
+      const idx = ensureGroupColorIdx(g);
+      const scheme = GROUP_COLORS[idx % GROUP_COLORS.length];
+
+      const row = document.createElement('div');
+      row.className = 'group-row';
+      row.dataset.id = g.id;
+      row.dataset.type = 'group';
+      row.style.backgroundColor = scheme.base;
+      row.style.color = scheme.text;
+      row.innerHTML = `
+        <div class="cell select-cell"></div>
+        <div class="cell image-cell">
+          <img src="images/folder.png" alt="Group Folder" class="group-folder-img">
+        </div>
+        <div class="cell init-cell">
+          <span class="editable-int" data-type="group" data-id="${g.id}" data-field="init">${groupDisplayInit(g)}</span>
+        </div>
+        <div class="cell name-cell">
+          <span class="editable-text" data-type="group" data-id="${g.id}" data-field="name">${g.name}</span>
+        </div>
+        <div class="cell ac-cell"></div>
+        <div class="cell hp-cell"></div>
+        <div class="cell temp-hp-cell"></div>
+        <div class="cell status-cell"></div>
+        <div class="cell role-cell"></div>
+        <div class="cell actions-cell">
+          <div class="btn-group">
+            ${swatchButtonHTML(g.id, scheme.base)}
+            <button class="row-del" data-type="group" data-id="${g.id}" title="Delete group">🗑️</button>
+          </div>
+        </div>
+        <div class="cell dashboard-link-cell"></div>
+      `;
+      combatantListBody.appendChild(row);
+
+      (g.members || []).forEach(m => paintCombatant(m, true, scheme));
+    };
+
+    // Combatant row
+    const paintCombatant = (c, inGroup = false, scheme = null) => {
+      const isSelected = selectedCombatantIds.has(c.id);
+      const isCurrent  = curId === c.id;
+
+      const row = document.createElement('div');
+      row.className = `tracker-table-row ${inGroup ? 'in-group' : ''} ${isSelected ? 'selected' : ''} ${isCurrent ? 'current-turn' : ''}`;
+      row.dataset.id = c.id;
+      row.dataset.type = 'combatant';
+
+      if (inGroup && scheme) {
+        row.style.backgroundColor = scheme.member;
+        row.style.color = scheme.text;
+      }
+
+      const { html: hpIconHtml } = hpStateAsset(Number(c.hp), Number(c.maxHp));
+
+      row.innerHTML = `
+        <div class="cell select-cell">
+          <input type="checkbox" class="combatant-checkbox" data-id="${c.id}" ${isSelected ? 'checked' : ''}>
+        </div>
+        <div class="cell image-cell">
+          <img class="editable-img" data-type="combatant" data-id="${c.id}" src="${c.imageUrl || 'images/icon.png'}" alt="${c.name}">
+        </div>
+        <div class="cell init-cell">
+          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="init">${c.init}</span>
+        </div>
+        <div class="cell name-cell">
+          <span class="editable-text" data-type="combatant" data-id="${c.id}" data-field="name">${c.name}</span>
+        </div>
+        <div class="cell ac-cell">
+          <span class="ac-shield">🛡️</span>
+          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="ac">${c.ac}</span>
+        </div>
+        <div class="cell hp-cell" data-id="${c.id}">
+          ${hpIconHtml}
+          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="hp">${c.hp}</span>
+          <span> / </span>
+          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="maxHp">${c.maxHp}</span>
+        </div>
+        <div class="cell temp-hp-cell">
+          <span class="temp-icon">✨</span>
+          <span class="editable-int" data-type="combatant" data-id="${c.id}" data-field="tempHp">${c.tempHp || 0}</span>
+        </div>
+        <div class="cell status-cell">
+          ${condChipsHTML(c)}
+          <button class="btn btn-add-status" data-id="${c.id}">+ Add</button>
+        </div>
+        <div class="cell role-cell">${c.role?.toUpperCase?.() || ''}</div>
+        <div class="cell actions-cell">
+          <div class="btn-group">
+            <button class="btn btn-spellcaster" data-id="${c.id}" title="Spell slots">
+              ${c.spellSlots ? '🪄 Slots' : '🪄 Make Caster'}
+            </button>
+            <button class="row-del" data-type="combatant" data-id="${c.id}" title="Delete combatant">🗑️</button>
+          </div>
+        </div>
+        <div class="cell dashboard-link-cell"><button title="Toggle Dashboard">📄</button></div>
+      `;
+      // Inline slots panel (if open)
+      if (c._slotsOpen) {
+        const panel = document.createElement('div');
+        panel.className = 'slots-inline';
+        panel.dataset.id = c.id;
+        panel.style.gridColumn = '1 / -1';
+        panel.style.display = 'block';
+        panel.innerHTML = buildSlotsInlineHTML(c);
+        row.appendChild(panel);
+      }
+
+      combatantListBody.appendChild(row);
+    };
+
+    // Paint everything
+    combatants.forEach(item => {
+      if (item.type === 'group') paintGroup(item);
+      else paintCombatant(item, false, null);
+    });
+
+    trackerTable?.classList.toggle('selection-locked', isLocked);
+  }
+
   // ====== INIT ======
   setRoundDisplay();
   setCurrentTurnDisplay();
-  notify();                               // single source of truth
+  notify();
   window.addEventListener('resize', updateStatusCellLayout);
 })();
