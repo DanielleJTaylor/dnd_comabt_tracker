@@ -237,3 +237,49 @@
   width: auto;      /* or omit */
   min-width: 1150px;
 }
+
+
+
+
+/* Status cell: base layout */
+#tracker-table .status-cell {
+  display: flex !important;
+  align-items: center;
+  gap: .25rem;
+  /* override any earlier center alignment */
+  justify-content: flex-start;
+}
+
+/* Chips container */
+#tracker-table .status-cell .cond-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem;
+}
+
+/* ---------- One-line mode (default) ---------- */
+/* Chips take natural width; button sits right after */
+#tracker-table .status-cell:not(.wrapped) .cond-list {
+  flex: 0 0 auto;
+  min-width: max-content;  /* prevents the "0 width" squish you saw */
+}
+#tracker-table .status-cell:not(.wrapped) .btn-add-status {
+  margin-left: .25rem;
+  /* no flex:0 0 auto here; let it size naturally */
+  white-space: nowrap;
+}
+
+/* ---------- Wrapped mode (chips onto 2nd line) ---------- */
+/* Chips can shrink; button moves to far right */
+#tracker-table .status-cell.wrapped .cond-list {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+#tracker-table .status-cell.wrapped .btn-add-status {
+  margin-left: auto;       /* pushes to right edge */
+  align-self: flex-start;  /* top-align next to first chip row */
+  white-space: nowrap;
+}
+
+/* optional: remove extra margins since we use gap */
+#tracker-table .status-cell .condition-chip { margin: 0; }

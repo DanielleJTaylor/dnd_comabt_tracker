@@ -41,6 +41,12 @@
   // ====== HELPERS ======
   const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
+  // --- add near the top, with other helpers ---
+  function escapeAttr(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+  function escapeHTML(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+
+
   function forEachItem(cb) {
     for (const item of combatants) {
       if (item.type === 'combatant') cb(item);
@@ -153,34 +159,94 @@
     notify();
   }
 
-  // ====== CONDITIONS ======
+  // ====== CONDITIONS (turn-based, time-travel safe) ======
   const CONDITION_LIST = [
     'Blinded','Charmed','Deafened','Frightened','Grappled','Incapacitated',
     'Invisible','Paralyzed','Petrified','Poisoned','Prone','Restrained',
     'Stunned','Unconscious','Concentrating'
   ];
-  function ensureConditionsArray(c) { if (!Array.isArray(c.conditions)) c.conditions = []; return c.conditions; }
-  function isConditionActive(cond, round) {
-    return round >= cond.startRound && round <= cond.endRound;
+
+  function ensureConditionsArray(c) {
+    if (!Array.isArray(c.conditions)) c.conditions = [];
+    return c.conditions;
   }
+
+  // Add a condition that "ticks" only at the start of the OWNER's turns.
+  // We store WHEN it was applied (round + turnPtr) and its duration in OWNER turns.
   function addConditionToCombatant(id, name, durationRounds = 1, note = '') {
     const { item } = findEntity(id);
     if (!item || item.type !== 'combatant') return false;
+
     const dur = Math.max(1, parseInt(durationRounds, 10) || 1);
+
     ensureConditionsArray(item).push({
       id: `cond_${uid()}`,
+      ownerId: id,
       name: String(name || '').trim() || 'Condition',
       note: String(note || ''),
-      startRound: currentRound,
-      endRound: currentRound + dur - 1 // inclusive
+      appliedAtRound: currentRound,
+      appliedAtPtr: turnPtr,       // turn-index when applied
+      durationRounds: dur
     });
-    notify(); return true;
+    notify();
+    return true;
   }
+
+  // Owner index in the CURRENT order
+  function condOwnerIdx(cond) {
+    const order = getTurnOrderIds();
+    return order.indexOf(cond.ownerId);
+  }
+
+  // Visible only if we've progressed to (or past) the moment it was applied
+  function isConditionVisibleNow(cond) {
+    if (currentRound < cond.appliedAtRound) return false;
+    if (currentRound === cond.appliedAtRound && turnPtr < cond.appliedAtPtr) return false;
+    return true;
+  }
+
+  // How many of the owner's turns have STARTED since the application time?
+  function ownerTurnsSinceAdded(cond) {
+    const ownerIdx = condOwnerIdx(cond);
+    if (ownerIdx < 0) return 0; // owner missing from list
+
+    // First owner's turn AFTER the application moment:
+    // If applied before the owner in that round -> same round, else next round
+    const firstRound = cond.appliedAtRound + (cond.appliedAtPtr < ownerIdx ? 0 : 1);
+
+    if (currentRound < firstRound) return 0;
+
+    // Completed owner turns in fully passed rounds:
+    let n = currentRound - firstRound;
+
+    // Plus this round if we've reached/passed the owner's slot
+    if (turnPtr >= ownerIdx) n += 1;
+
+    return n;
+  }
+
+  // Remaining rounds (owner-turns), never negative
+  function remainingRounds(cond) {
+    // Back-compat: old saved shapes {startRound,endRound}
+    if (cond.durationRounds == null && cond.startRound != null && cond.endRound != null) {
+      if (currentRound < cond.startRound) return 0;
+      return Math.max(0, (cond.endRound - currentRound + 1));
+    }
+    const used = ownerTurnsSinceAdded(cond);
+    return Math.max(0, (cond.durationRounds ?? 0) - used);
+  }
+
+  function isConditionActive(cond) {
+    return isConditionVisibleNow(cond) && remainingRounds(cond) > 0;
+  }
+
+  // Remove condition by explicit user action
   function removeCondition(id, condId) {
     const { item } = findEntity(id);
     if (!item || item.type !== 'combatant') return false;
     item.conditions = (item.conditions || []).filter(c => c.id !== condId);
-    notify(); return true;
+    notify();
+    return true;
   }
 
   // ====== MUTATIONS ======
@@ -355,15 +421,34 @@
       GROUP_COLORS
     };
   }
+
+  function updateCurrentTurnHighlight() {
+    // Clear previous
+    document
+      .querySelectorAll('.tracker-table-row.current-turn, .group-row.current-turn')
+      .forEach(el => el.classList.remove('current-turn'));
+
+    const order = getTurnOrderIds();
+    const activeId = order[turnPtr];
+    if (!activeId) return;
+
+    const row = document.querySelector(`[data-id="${activeId}"][data-type="combatant"]`);
+    if (!row) return;
+
+    // If it’s in a group, outline the group header instead
+    const groupRow = row.closest('.group-row');
+    if (groupRow) groupRow.classList.add('current-turn');
+    else row.classList.add('current-turn');
+  }
+
   function notify() {
     clampTurnPtr();
-    // UI header
     setRoundDisplay();
     setCurrentTurnDisplay();
     render();
-    // external subscribers (bulk UI, autosave, etc.)
+    updateCurrentTurnHighlight();
+    updateStatusCellLayout();   // keep chips/button layout correct
     listeners.forEach(fn => fn(getSnapshot()));
-    // autosave hook if present
     window.scheduleAutosave?.();
   }
 
@@ -371,18 +456,27 @@
   function groupDisplayInit(group) {
     return Number.isFinite(group?.init) ? String(group.init) : '—';
   }
+
+  // (replace ONLY this function body)
   function condChipsHTML(c) {
     const list = Array.isArray(c.conditions) ? c.conditions : [];
-    const active = list.filter(cond => isConditionActive(cond, currentRound));
+    const active = list.filter(isConditionActive);
     if (!active.length) return '<div class="cond-list"></div>';
+
     return `<div class="cond-list">` + active.map(cond => {
-      const remaining = cond.endRound - currentRound + 1;
-      const safeName = (cond.name || '').replace(/"/g, '&quot;');
-      // Tooltip text from ConditionsCatalog, if available
-      const desc = (window.ConditionsCatalog?.get?.(cond.name)?.desc || []).join('\n');
-      const title = desc ? ` title="${desc.replace(/"/g,'&quot;')}"` : '';
-      return `<span class="condition-chip" data-cond-id="${cond.id}" data-cond-name="${safeName}"${title}>
-                ${cond.name} (${Math.max(0, remaining)}r)
+      const remain = remainingRounds(cond);
+      const safeName = escapeAttr(cond.name || 'Condition');
+
+      // Pull description (array of lines) from the catalog
+      const descLines = (window.ConditionsCatalog?.get?.(cond.name)?.desc || []);
+      const descText  = descLines.join('\n');            // keep as text; we’ll render with pre-line
+      const safeDesc  = escapeAttr(descText);
+
+      return `<span class="condition-chip"
+                    data-cond-id="${cond.id}"
+                    data-cond-name="${safeName}"
+                    data-cond-desc="${safeDesc}">
+                ${safeName} (${remain}r)
                 <span class="x" title="Remove" data-remove-cond="1" data-cond-id="${cond.id}">×</span>
               </span>`;
     }).join('') + `</div>`;
@@ -455,6 +549,75 @@
                      background:${bg};border:1px solid #0002;display:inline-block;">
       </button>`;
   }
+  
+
+
+
+  // ====== CONDITION CHIP TOOLTIP ======
+  let _condTipEl = null;
+  function ensureCondTip(){
+    if (_condTipEl) return _condTipEl;
+    const tip = document.createElement('div');
+    tip.className = 'cond-tip';
+    // inline base styles; you can override in CSS too
+    Object.assign(tip.style, {
+      position: 'fixed',
+      display: 'none',
+      pointerEvents: 'none',
+      zIndex: 10000,
+      maxWidth: '380px',
+      background: 'rgba(20,20,20,.96)',
+      color: '#fff',
+      padding: '10px 12px',
+      borderRadius: '10px',
+      border: '1px solid rgba(255,255,255,.08)',
+      boxShadow: '0 12px 28px rgba(0,0,0,.28)',
+      lineHeight: '1.35',
+      whiteSpace: 'pre-line'
+    });
+    tip.innerHTML = '';
+    document.body.appendChild(tip);
+    _condTipEl = tip;
+    return tip;
+  }
+  function setCondTipContent(name, desc){
+    const tip = ensureCondTip();
+    tip.innerHTML =
+      `<div class="cond-tip-title" style="font-weight:700;margin-bottom:4px;">${escapeHTML(name)}</div>` +
+      `<div class="cond-tip-desc">${escapeHTML(desc).replace(/\n/g,'<br>')}</div>`;
+  }
+  function positionCondTip(x, y){
+    const tip = ensureCondTip();
+    const margin = 14;
+    // place to the bottom-right of cursor, clamp to viewport
+    tip.style.display = 'block';
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    const left = Math.min(window.innerWidth - w - 8, x + margin);
+    const top  = Math.min(window.innerHeight - h - 8, y + margin);
+    tip.style.left = left + 'px';
+    tip.style.top  = top + 'px';
+  }
+  function hideCondTip(){ if (_condTipEl) _condTipEl.style.display = 'none'; }
+
+  // Delegated hover handlers
+  combatantListBody?.addEventListener('mouseover', (e) => {
+    const chip = e.target.closest('.condition-chip');
+    if (!chip) return;
+    setCondTipContent(chip.dataset.condName || '', chip.dataset.condDesc || '');
+    positionCondTip(e.clientX, e.clientY);
+  });
+  combatantListBody?.addEventListener('mousemove', (e) => {
+    if (_condTipEl?.style.display === 'block') positionCondTip(e.clientX, e.clientY);
+  });
+  combatantListBody?.addEventListener('mouseout', (e) => {
+    const from = e.target.closest('.condition-chip');
+    const to   = e.relatedTarget && e.relatedTarget.closest ? e.relatedTarget.closest('.condition-chip') : null;
+    if (from && !to) hideCondTip();
+  });
+
+
+
+
 
   function render() {
     if (!combatantListBody) return;
@@ -568,6 +731,30 @@
 
     // Lock styling
     trackerTable?.classList.toggle('selection-locked', isLocked);
+  }
+
+  // ====== STATUS-CELL LAYOUT (1-line until 3+ chips need wrapping) ======
+  function updateStatusCellLayout() {
+    document
+      .querySelectorAll('#combatant-list-body .tracker-table-row .status-cell')
+      .forEach(cell => {
+        const list = cell.querySelector('.cond-list');
+        const btn  = cell.querySelector('.btn-add-status');
+        if (!list) { cell.classList.remove('wrapped'); return; }
+
+        const chips = list.querySelectorAll('.condition-chip');
+        // Always one-line for 0–2 chips
+        if (chips.length < 3) { cell.classList.remove('wrapped'); return; }
+
+        // For 3+, wrap only when they can't fit next to the button
+        const chipsTotalWidth = Array.from(chips).reduce((w, ch) => w + ch.offsetWidth, 0)
+                              + Math.max(0, chips.length - 1) * 4; // ~gap px
+        const btnWidth = (btn?.offsetWidth || 0);
+        const available = cell.clientWidth - btnWidth - 8; // small fudge
+
+        const needWrap = chipsTotalWidth > available;
+        cell.classList.toggle('wrapped', needWrap);
+      });
   }
 
   // ====== INLINE EDIT ======
@@ -792,8 +979,8 @@
     const trimmed = String(name || '').trim();
     const m = trimmed.match(/^(.*?)(?:\s+(\d+))?$/);
     const base = (m?.[1] || '').toLowerCase();
-    const num = m?.[2] ? parseInt(m[2], 10) : null;
-    return { base, num };
+    theNum = m?.[2] ? parseInt(m[2], 10) : null;
+    return { base, num: theNum };
   }
   function compareNames(aName, bName, alphaDir = 'asc') {
     const A = splitNameForSort(aName);
@@ -903,5 +1090,6 @@
   // ====== INIT ======
   setRoundDisplay();
   setCurrentTurnDisplay();
-  render();
+  notify();                               // single source of truth
+  window.addEventListener('resize', updateStatusCellLayout);
 })();
