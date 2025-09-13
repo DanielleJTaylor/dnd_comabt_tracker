@@ -97,8 +97,8 @@
   --group-folder-body:#e6d3a5;
   --group-folder-stroke:#c3b07e;
   --group-folder-gloss:rgba(255,255,255,.35);
-  --group-header-bg:#c6f0c1;
-  --group-header-br:#a3c19f;
+  --group-header-bg:#ffffff;
+  --group-header-br:#ffffff;
   --group-member-bg:#ddf3da;
   --group-member-bg-hover:#eaf0e6;
 }
