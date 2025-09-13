@@ -540,15 +540,22 @@
     document.addEventListener('keydown', onColorEsc);
     document.addEventListener('click', onColorDocClick, true);
   }
+
   function swatchButtonHTML(groupId, bg) {
     const size = 22;
     return `
       <button class="group-color-swatch" title="Change color"
               data-group-id="${groupId}"
-              style="width:${size}px;height:${size}px;border-radius:50%;
-                     background:${bg};border:1px solid #0002;display:inline-block;">
+              style="
+                width:${size}px;height:${size}px;padding:0;
+                border-radius:50%;
+                background:${bg};
+                border:2px solid #ffffff;
+                box-shadow:0 0 0 1px rgba(0,0,0,.25);
+                display:inline-block;">
       </button>`;
   }
+
   
 
 

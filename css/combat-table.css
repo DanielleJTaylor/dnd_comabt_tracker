@@ -65,13 +65,7 @@
 .image-cell img{ width:60px; height:60px; border-radius:50%; object-fit:cover; }
 .select-cell input{ transform:scale(1.2); cursor:pointer; }
 
-/* Init/AC/HP/Temp styling */
-.init-cell span{ font-weight:700; color:#2a4d8f; background:#e3ecff; padding:7px 12px; border-radius:4px; }
-.ac-shield{ font-size:1.3em; margin-right:4px; vertical-align:middle; }
-.hp-cell{ display:flex; align-items:center; gap:.4rem; font-weight:bold; }
-.hp-heart{ color:#e53935; font-size:1.3em; line-height:1; vertical-align:middle; display:inline-block; }
-.temp-hp-cell{ display:flex; align-items:center; gap:.3rem; font-weight:bold; color:#4a7c59; }
-.temp-icon{ font-size:1.2em; color:#4caf50; vertical-align:middle; display:inline-block; }
+
 
 /* Buttons in rows */
 .actions-cell .btn-group{ display:flex; gap:4px; }
@@ -283,3 +277,136 @@
 
 /* optional: remove extra margins since we use gap */
 #tracker-table .status-cell .condition-chip { margin: 0; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* ========== White pill look for text & buttons ========== */
+:root{
+  --pill-bg:#fff;
+  --pill-br:#e5e5e5;
+  --pill-radius:10px;
+  --pill-pad-y:6px;
+  --pill-pad-x:10px;
+}
+
+/* Name pill (both read and inline edit states) */
+.name-cell .editable-text,
+.name-cell .inline-editor{
+  background:var(--pill-bg);
+  border:1px solid var(--pill-br);
+  border-radius:var(--pill-radius);
+  padding:var(--pill-pad-y) var(--pill-pad-x);
+  box-shadow:0 1px 0 rgba(0,0,0,.02);
+}
+
+/* =========================
+   Scope pill styles to combatant rows only
+   ========================= */
+#tracker-table .tracker-table-row .ac-cell,
+#tracker-table .tracker-table-row .hp-cell,
+#tracker-table .tracker-table-row .temp-hp-cell,
+#tracker-table .tracker-table-row .role-cell{
+  background:#fff;
+  border:1px solid #e5e5e5;
+  border-radius:10px;
+  padding:6px 10px;
+  color:#000;
+  justify-content:flex-start;
+}
+
+/* Buttons (only combatant rows): white */
+#tracker-table .tracker-table-row .status-cell button,
+#tracker-table .tracker-table-row .actions-cell .btn-group button,
+#tracker-table .tracker-table-row .dashboard-link-cell button{
+  background:#fff !important;
+  color:#000 !important;
+  border:1px solid #e5e5e5 !important;
+  border-radius:10px !important;
+  padding:6px 10px !important;
+  line-height:1.1;
+}
+
+/* =========================
+   Group header row overrides
+   ========================= */
+/* Flatten everything by default */
+.group-row .ac-cell,
+.group-row .hp-cell,
+.group-row .temp-hp-cell,
+.group-row .role-cell,
+.group-row .status-cell{
+  background:transparent !important;
+  border:0 !important;
+  padding:0 !important;
+  box-shadow:none !important;
+}
+
+/* Don't zero-out the color swatch in group rows */
+.group-row .actions-cell .btn-group button:not(.row-del):not(.group-color-swatch){
+  background:transparent !important;
+  color:inherit !important;
+  border:0 !important;
+  padding:0 !important;
+  box-shadow:none !important;
+}
+
+/* Make the swatch stand out with a white ring */
+.group-color-swatch{
+  padding:0 !important;
+  width:22px; height:22px;
+  border-radius:50% !important;
+  border:2px solid #fff !important;                 /* white ring */
+  box-shadow:0 0 0 1px rgba(0,0,0,.25) !important;   /* outer keyline */
+  display:inline-block;
+  cursor:pointer;
+}
+
+.group-color-swatch:focus{
+  outline:none;
+  box-shadow:0 0 0 2px #fff, 0 0 0 4px rgba(0,0,0,.35) !important;
+}
+
+
+
+/* Group: Init & Name should stay as white pills */
+.group-row .init-cell span,
+.group-row .name-cell .editable-text,
+.group-row .name-cell .inline-editor{
+  background:#fff !important;
+  color:#000 !important;
+  border:1px solid #e5e5e5 !important;
+  border-radius:10px !important;
+  padding:6px 10px !important;
+}
+
+/* Group: Delete button stays white pill */
+.group-row .row-del{
+  background:#fff !important;
+  color:#000 !important;
+  border:1px solid #e5e5e5 !important;
+  border-radius:10px !important;
+  padding:6px 10px !important;
+  line-height:1.1;
+}
+
+
+
+/* Init/AC/HP/Temp styling */
+.init-cell span{ font-weight:700; color:#2a4d8f; background:#e3ecff; padding:7px 12px; border-radius:4px; }
+.ac-shield{ font-size:1.3em; margin-right:4px; vertical-align:middle; }
+.hp-cell{ display:flex; align-items:center; gap:.4rem; font-weight:bold; }
+.hp-heart{ color:#e53935; font-size:1.3em; line-height:1; vertical-align:middle; display:inline-block; }
+.temp-hp-cell{ display:flex; align-items:center; gap:.3rem; font-weight:bold; color:#4a7c59; }
+.temp-icon{ font-size:1.2em; color:#4caf50; vertical-align:middle; display:inline-block; }
+
