@@ -241,7 +241,7 @@
   align-items: center;
   gap: .25rem;
   /* override any earlier center alignment */
-  justify-content: flex-start;
+  justify-content: center;
 }
 
 /* Chips container */

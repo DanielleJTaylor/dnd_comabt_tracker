@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Dashboards</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="./styles.css" />
+
+  <!-- PDF.js for text extraction from PDFs -->
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <script>
+    if (window['pdfjsLib']) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+    }
+  </script>
+</head>
+<body>
+  <header class="db-topbar">
+    <div class="left">
+      <button id="newCharBtn" class="btn">➕ New: 5e Character</button>
+      <button id="newMonsterBtn" class="btn">➕ New: 5e Monster/NPC</button>
+    </div>
+    <div class="right">
+      <button id="exportJsonBtn" class="btn">⬇ Export JSON</button>
+    </div>
+  </header>
+
+  <main class="db-layout">
+    <aside class="db-sidebar">
+      <div class="side-head">Saved Dashboards</div>
+
+        <!-- moved here -->
+        <div class="side-toolbar">
+        <button id="importTextBtn" class="btn small">📋 Import Text</button>
+        <label class="btn file small">
+            📄 Import PDF
+            <input id="importPdfInput" type="file" accept="application/pdf" hidden />
+        </label>
+        <label class="btn file small">
+            📦 Import JSON
+            <input id="importJsonInput" type="file" accept="application/json" hidden />
+        </label>
+        </div>
+
+
+      <ul id="dashList" class="dash-list"></ul>
+    </aside>
+
+    <!-- FIXED-WIDTH canvas: remains constant even if sidebar resizes -->
+    <section class="db-canvas">
+      <div id="sheetCanvas" class="sheet width-fixed"></div>
+    </section>
+  </main>
+
+  <!-- Modal for "Import Text" -->
+  <dialog id="importTextDialog" class="modal">
+    <form method="dialog" class="modal-card">
+      <h3>Paste 5e Statblock Text</h3>
+      <textarea id="importTextArea" placeholder="Paste a 5e statblock here…" rows="16"></textarea>
+      <div class="modal-actions">
+        <button value="cancel" class="btn btn-secondary">Cancel</button>
+        <button id="importTextConfirm" value="confirm" class="btn">Import</button>
+      </div>
+    </form>
+  </dialog>
+
+
+    <!-- dashboards/index.html -->
+    <script type="module" src="./core.js"></script>
+
+</body>
+</html>

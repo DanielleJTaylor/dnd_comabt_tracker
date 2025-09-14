@@ -8,35 +8,66 @@
     <link rel="stylesheet" href="css/view-dashboards.css">
 </head>
 <body>
-    <!-- Main container for the dashboard view -->
+    <!-- …inside <body> … -->
     <div id="dashboard-viewer">
-        <header id="dashboard-header">
-            <div class="header-left">
-                <!-- This button ALWAYS goes to the home page -->
-                <a href="index.html" id="dash-back" class="btn">← Back to Home</a>
-                <!-- This button will be shown by JS to go up one folder level -->
-                <button id="up-folder-btn" class="btn" style="display: none;">↑ Up a Folder</button>
-                <h1>📋 Dashboards</h1>
-            </div>
-        </header>
-
-        <!-- Breadcrumbs for folder navigation -->
-        <nav id="dash-breadcrumbs" class="dash-breadcrumbs"></nav>
-
-        <div class="dashboard-controls">
-            <button id="newDashboardBtn">➕ New Dashboard</button>
-            <button id="sortBtn">⇅ Sort A-Z</button>
-            <button id="newFolderBtn">📁 New Folder</button>
-            <button id="importBtn">📥 Import</button>
-            <input id="importInput" type="file" accept="application/json,.json" multiple style="display:none;">
+    <header id="dashboard-header">
+        <div class="header-left">
+        <a href="index.html" id="dash-back" class="btn">← Back to Home</a>
+        <button id="up-folder-btn" class="btn" style="display:none;">↑ Up a Folder</button>
+        <h1>📋 Dashboards</h1>
         </div>
+    </header>
 
-        <main id="dashboard-list-container">
-            <!-- Dynamically generated dashboard cards will appear here -->
-        </main>
+    <nav id="dash-breadcrumbs" class="dash-breadcrumbs"></nav>
+
+    <!-- Controls -->
+    <div class="dashboard-controls">
+        <button id="newDashboardBtn">➕ New Dashboard</button>
+        <button id="newCharBtn">➕ New: 5e Character</button>
+        <button id="newMonsterBtn">➕ New: 5e Monster/NPC</button>
+
+        <button id="sortBtn">⇅ Sort A-Z</button>
+        <button id="newFolderBtn">📁 New Folder</button>
+
+        <!-- Imports -->
+        <button id="importTextBtn">📋 Import Text</button>
+        <label class="btn">
+        📄 Import PDF
+        <input id="importPdfInput" type="file" accept="application/pdf" hidden>
+        </label>
+        <label class="btn">
+        📥 Import JSON
+        <input id="importInput" type="file" accept="application/json,json" multiple hidden>
+        </label>
     </div>
 
-    <!-- JavaScript to power the page -->
+    <main id="dashboard-list-container"></main>
+    </div>
+
+    <!-- Paste-text modal -->
+    <dialog id="importTextDialog" class="modal">
+    <form method="dialog" class="modal-card" style="min-width: min(900px, 92vw);">
+        <h3 style="margin-top:0;">Paste 5e Statblock Text</h3>
+        <textarea id="importTextArea" rows="16" placeholder="Paste a D&D 5e statblock…"
+                style="width:100%;"></textarea>
+        <div class="modal-actions" style="margin-top:.75rem; display:flex; gap:.5rem; justify-content:flex-end;">
+        <button value="cancel" class="btn btn-secondary">Cancel</button>
+        <button id="importTextConfirm" value="confirm" class="btn">Import</button>
+        </div>
+    </form>
+    </dialog>
+
+    <!-- PDF.js (needed for PDF import) -->
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+    <script>
+    if (window['pdfjsLib']) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+    }
+    </script>
+
+    <!-- Importer module is dynamically imported by view-dashboards.js -->
     <script src="scripts/view-dashboards.js" defer></script>
+
 </body>
 </html>

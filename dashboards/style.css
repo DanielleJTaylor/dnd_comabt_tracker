@@ -1,0 +1,142 @@
+:root{
+  --bg: #efe6ff;
+  --ink: #222;
+  --panel: #ffffff;
+  --accent: #7c4dff;
+  --line: #d9d2ff;
+  --sheet-width: 920px; /* <— fixed dashboard width */
+  --radius: 12px;
+}
+
+*{ box-sizing: border-box; }
+
+body{
+  margin:0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+/* Topbar */
+.db-topbar{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px; gap:8px; border-bottom:1px solid var(--line);
+  background: #f6f2ff;
+  position: sticky; top: 0; z-index: 5;
+}
+.db-topbar .btn{ margin-right:6px; }
+.db-topbar .left, .db-topbar .right{ display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+
+/* Layout */
+.db-layout{ display:flex; min-height: calc(100vh - 50px); }
+.db-sidebar{
+  width: 280px; min-width: 220px; max-width: 360px;
+  border-right:1px solid var(--line);
+  background:#faf7ff;
+  padding:10px;
+}
+.side-head{ font-weight:700; margin-bottom:8px; }
+.dash-list{ list-style:none; margin:0; padding:0; }
+.dash-list li{
+  display:flex; justify-content:space-between; align-items:center;
+  background: var(--panel); border:1px solid var(--line);
+  padding:8px 10px; border-radius:10px; margin-bottom:6px;
+}
+.dash-list li .act{ display:flex; gap:6px; }
+.dash-list button{ font-size:12px; }
+
+.db-canvas{
+  flex:1; display:flex; justify-content:center; align-items:flex-start;
+  padding:16px 20px; overflow:auto;
+}
+
+/* Fixed width sheet */
+.width-fixed{
+  width: var(--sheet-width);
+  min-width: var(--sheet-width);
+  max-width: var(--sheet-width);
+  margin: 0 auto;
+}
+
+/* Sheet look */
+.sheet{
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: 0 10px 28px rgba(20,0,80,.06);
+}
+
+/* Simple grid blocks */
+.grid{
+  display:grid; gap:10px;
+  grid-template-columns: repeat(12, 1fr);
+}
+.card{
+  border:1px solid var(--line);
+  border-radius: 10px;
+  padding:10px; background:#fff;
+}
+.card h4{ margin:0 0 6px 0; font-size:13px; color:#333; }
+.kv{ display:flex; gap:8px; flex-wrap:wrap; }
+.kv label{ font-weight:600; }
+.num{
+  font-weight:800; font-size:38px; text-align:center;
+}
+.small{ font-size:12px; opacity:.8; }
+
+/* Inputs */
+input[type="text"], input[type="number"], textarea{
+  width:100%; border:1px solid var(--line); border-radius:8px; padding:6px 8px;
+  background:#fff;
+}
+textarea{ resize:vertical; }
+
+/* Pills for spells */
+.spell-pills{ display:flex; gap:6px; flex-wrap:wrap; }
+.pill{
+  padding:2px 8px; border:1px solid var(--line); border-radius:999px; background:#fff;
+}
+
+/* Buttons */
+.btn{
+  appearance:none; border:1px solid var(--line); background:#fff;
+  border-radius: 10px; padding:6px 10px; cursor:pointer;
+}
+.btn:hover{ border-color:#c1b6ff; }
+.btn-secondary{ background:#f4f1ff; }
+
+.btn.file{ position:relative; overflow:hidden; }
+.btn.file input{ position:absolute; inset:0; opacity:0; cursor:pointer; }
+.modal{ border:none; padding:0; }
+.modal-card{
+  width:min(900px, 90vw); background:#fff; border:1px solid var(--line);
+  border-radius:12px; padding:14px;
+}
+.modal-card textarea{ height: 45vh; }
+.modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:10px; }
+
+/* Tiny badges in list */
+.badge{ font: 11px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#ede8ff; border:1px solid #dacfff; padding:2px 6px; border-radius:6px; }
+
+/* dashboards/styles.css */
+.db-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  height: 100dvh;
+}
+
+.db-sidebar { overflow: auto; }
+
+.db-canvas {
+  overflow: auto;            /* allows vertical scroll */
+  display: grid;
+  place-items: start center; /* center the sheet */
+  padding: 16px;
+}
+
+.sheet.width-fixed {
+  width: 960px;
+  min-width: 960px;
+  max-width: 960px;
+}
