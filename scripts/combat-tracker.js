@@ -422,6 +422,8 @@
     clampTurnPtr();
     setRoundDisplay();
     setCurrentTurnDisplay();
+    // If DOM is about to change, make sure any floating tooltip is gone
+    hideCondTip();
     render();
     updateCurrentTurnHighlight();
     updateStatusCellLayout();
@@ -982,6 +984,18 @@
     syncSlotRow(container, L, sd);
     notify();
   });
+
+  // Extra guards so the tooltip never "sticks"
+  combatantListBody?.addEventListener('mouseleave', hideCondTip);   // left the whole list
+  window.addEventListener('scroll', hideCondTip, true);             // any ancestor scroll
+  document.addEventListener('keydown', e => {                       // Esc to dismiss
+    if (e.key === 'Escape') hideCondTip();
+  });
+  window.addEventListener('blur', hideCondTip);                     // tab/window loses focus
+  document.addEventListener('visibilitychange', () => {             // page hidden
+    if (document.hidden) hideCondTip();
+  });
+
 
   function syncSlotRow(container, level, sd) {
     const count = container.querySelector(`.slot-count[data-level="${level}"]`);
