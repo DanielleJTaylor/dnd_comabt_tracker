@@ -127,10 +127,11 @@ body {
   border: 1px solid rgba(0,0,0,.08);
   border-radius: 10px;
   box-shadow: 0 2px 10px rgba(0,0,0,.06);
-  padding: 12px 12px 36px;     /* room for footer/handles */
+  padding: 0px 12px 36px;     /* room for footer/handles */
   overflow: hidden;
   outline: none;               /* remove contenteditable outline */
   transition: box-shadow .12s ease, transform .04s ease;
+  justify-content: center;
 }
 .block:focus-within { box-shadow: 0 6px 18px rgba(0,0,0,.14); }
 
@@ -140,6 +141,7 @@ body {
   line-height: 1.35;
   overflow-wrap: anywhere;
   caret-color: #222;
+  justify-content: center;
 }
 .block .block-content:empty:before {
   content: attr(data-placeholder);
@@ -241,3 +243,8 @@ body {
   }
   #sheet-container { padding-bottom: 72px; }
 }
+
+
+
+
+

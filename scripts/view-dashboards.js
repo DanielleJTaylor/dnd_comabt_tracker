@@ -245,6 +245,7 @@
   // Monster/NPC template (portrait top-left, tight layout; no big gaps)
   // Lightweight SVG placeholder shown in the real image block until you replace it
   // Lightweight SVG placeholder for the real image block
+  // Minimal portrait placeholder (no special styling)
   const PORTRAIT_PLACEHOLDER =
     "data:image/svg+xml;utf8," +
     encodeURIComponent(
@@ -256,132 +257,89 @@
       </svg>`
     );
 
-  // Monster/NPC template (portrait top-left; compact, non-overlapping)
+  // Monster/NPC template – plain HTML (headings/paragraphs/lists only)
   function makeMonsterTemplateBlocks() {
-    const css = `
-    <style>
-      .obx .card{background:#fff;border:1px solid #e2e2e2;border-radius:10px;padding:.7rem .9rem;line-height:1.35;box-shadow:0 1px 2px rgba(0,0,0,.04)}
-      .obx .name{font-weight:800;font-size:1.2rem}
-      .obx .meta{color:#666}
-      .obx .sec{font-weight:700;margin:0 0 .5rem;padding-bottom:.25rem;border-bottom:1px solid #eee}
-      .obx .big{font-size:2rem;font-weight:800;text-align:center}
-      .obx ul{margin:.25rem 0 0 1rem;padding:0}
-      .obx .list div{margin:.2rem 0}
-      .obx .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.25rem .75rem}
-    </style>`;
-
     return [
+      // Title row
+      block(0, 0, 12, 1, `<h2>Monster / NPC Name</h2>`),
 
-      { type: "text", x: 0, y: 0, w: 12, h: 1,html:
-        '<div class="name">Monster / NPC Name</div>' },
+      // Top-left image
+      { type: 'image', x: 0, y: 1, w: 5, h: 5, src: PORTRAIT_PLACEHOLDER, objectFit: 'contain' },
 
-      // Top-left image (real image block)
-      { type: "image", x: 0, y: 1, w: 5, h: 5, src: PORTRAIT_PLACEHOLDER, objectFit: "contain" },
+      // Type/alignment
+      block(5, 1, 7, 1, `<p>Medium humanoid (any), any alignment</p>`),
 
-      // Name / type
-      { type: "text", x: 5, y: 1, w: 7, h: 2, html:
-        `<div class="obx">
-          ${css}
-          <div class="card">
-            <div class="meta">Medium humanoid (any), any alignment</div>
-          </div>
-        </div>` },
+      // Stats (heading)
+      block(5, 2, 7, 5, `
+        <h3>Stats</h3>
+        <p><b>Initiative:</b> +0</p>
+        <p><b>Proficiency:</b> +2</p>
+        <p><b>Speed:</b> 30 ft.</p>
+        <p><b>XP:</b> (milestone)</p>
+        <p><b>Passive Perception:</b> 10</p>
+        <p><b>Passive Insight:</b> 10</p>
+        <p><b>Passive Investigation:</b> 10</p>
+      `),
 
-      // Stats (separate)
-      { type: "text", x: 5, y: 3, w: 7, h: 4, html:
-        `<div class="obx card">
-          <div class="sec">Stats</div>
-          <div class="list">
-            <div><b>Initiative:</b> +0</div>
-            <div><b>Proficiency:</b> +2</div>
-            <div><b>Speed:</b> 30 ft.</div>
-            <div><b>XP:</b> (milestone)</div>
-            <div><b>Passive Perception:</b> 10</div>
-            <div><b>Passive Insight:</b> 10</div>
-            <div><b>Passive Investigation:</b> 10</div>
-          </div>
-        </div>` },
+      // Optional status line (kept per your layout)
+      block(0, 6, 5, 1, `<h3>Alive?</h3>`),
 
-      {  type: "text", x: 0, y: 6, w: 5, h: 1, html:
-        '<div class="name">Alive?</div>' },
+      // AC (heading + value in its own block)
+      block(6, 7, 3, 1, `<h3>AC</h3>`),
+      block(6, 8, 3, 2, `<h2>14</h2>`),
 
+      // HP (heading)
+      block(9, 7, 3, 3, `
+        <h3>HP</h3>
+        <p><b>Max:</b> 100<br><b>Current:</b> 100<br><b>Temp:</b> 0</p>
+      `),
 
+      // Ability Scores (heading)
+      block(0, 7, 3, 3, `
+        <h3>Ability Scores</h3>
+        <p>10 <b>STR</b><br>10 <b>DEX</b><br>10 <b>CON</b><br>
+          10 <b>INT</b><br>10 <b>WIS</b><br>10 <b>CHA</b></p>
+      `),
 
-      // AC (heading)
-      { type: "text", x: 6, y: 7, w: 3, h: 1, html:
-        `<div class="obx card"><div class="sec">AC</div>` },
-      // AC (text)
-      { type: "text", x: 6, y: 8, w: 3, h: 2, html:
-        `<div class="big">14</div></div>` },
+      // Saving Throws (heading)
+      block(3, 7, 3, 3, `
+        <h3>Saving Throws</h3>
+        <ul>
+          <li>STR +0</li><li>DEX +0</li><li>CON +0</li>
+          <li>INT +0</li><li>WIS +0</li><li>CHA +0</li>
+        </ul>
+      `),
 
+      // Skills (heading) — double height
+      block(0, 10, 4, 8, `
+        <h3>Skills</h3>
+        <ul>
+          <li>Acrobatics +0</li><li>Animal Handling +0</li>
+          <li>Arcana +0</li><li>Athletics +0</li>
+          <li>Deception +0</li><li>History +0</li>
+          <li>Insight +0</li><li>Intimidation +0</li>
+          <li>Investigation +0</li><li>Medicine +0</li>
+          <li>Nature +0</li><li>Perception +0</li>
+          <li>Performance +0</li><li>Persuasion +0</li>
+          <li>Religion +0</li><li>Sleight of Hand +0</li>
+          <li>Stealth +0</li><li>Survival +0</li>
+        </ul>
+      `),
 
-      // HP — half height (h=3)
-      { type: "text", x: 9, y: 7, w: 3, h: 3, html:
-        `<div class="obx card">
-          <div class="sec">HP</div>
-          <div class="list">
-            <div><b>Max:</b> 100</div>
-            <div><b>Current:</b> 100</div>
-            <div><b>Temp:</b> 0</div>
-          </div>
-        </div>` },
+      // Features (heading)
+      block(4, 10, 8, 2, `
+        <h3>Features</h3>
+        <p>Description</p>
+      `),
 
+      // Actions (heading)
+      block(4, 12, 8, 5, `<h3>Actions</h3>—`),
 
-      // Ability Scores — half height (h=3)
-      { type: "text", x: 0, y: 7, w: 3, h: 3, html:
-        `<div class="obx card">
-          <div class="sec">Ability Scores</div>
-          <div class="list">
-            <div>10 <b>STR</b></div><div>10 <b>DEX</b></div><div>10 <b>CON</b></div>
-            <div>10 <b>INT</b></div><div>10 <b>WIS</b></div><div>10 <b>CHA</b></div>
-          </div>
-        </div>` },
-
-
-      // Saving Throws (separate)
-      { type: "text", x: 3, y: 7, w: 3, h: 3, html:
-        `<div class="obx card">
-          <div class="sec">Saving Throws</div>
-          <ul>
-            <li>STR +0</li><li>DEX +0</li><li>CON +0</li>
-            <li>INT +0</li><li>WIS +0</li><li>CHA +0</li>
-          </ul>
-        </div>` },
-      
-
-
-
-      // Skills — double height (h=8)
-      { type: "text", x: 0, y: 10, w: 4, h: 8, html:
-        `<div class="obx card">
-          <div class="sec">Skills</div>
-          <div class="list">
-            <div>Acrobatics +0</div><div>Animal Handling +0</div>
-            <div>Arcana +0</div><div>Athletics +0</div>
-            <div>Deception +0</div><div>History +0</div>
-            <div>Insight +0</div><div>Intimidation +0</div>
-            <div>Investigation +0</div><div>Medicine +0</div>
-            <div>Nature +0</div><div>Perception +0</div>
-            <div>Performance +0</div><div>Persuasion +0</div>
-            <div>Religion +0</div><div>Sleight of Hand +0</div>
-            <div>Stealth +0</div><div>Survival +0</div>
-          </div>
-        </div>` },
-
-      // Features (separate)
-      { type: "text", x: 4, y: 10, w: 8, h: 2, html:
-        `<div class="obx card">
-          <div class="sec">Features</div>
-          '<div class="name">Description</div>
-        </div>` },
-
-      // Everything below shifted to start after skills (no overlap)
-      { type: "text", x: 4, y: 12, w: 8, h: 5, html:
-        `<div class="obx card"><div class="sec"> Actions</div>—</div>` },
-      { type: "text", x: 4, y: 17, w: 8, h: 1, html:
-        `<div class="obx card"><div class="sec">Reactions</div>—</div>` },
+      // Reactions (heading)
+      block(4, 17, 8, 1, `<h3>Reactions</h3>—`),
     ];
   }
+
 
 
 

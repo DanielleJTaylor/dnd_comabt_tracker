@@ -1,781 +1,514 @@
-// scripts/dashboard-sheet.js
-// Locked dashboard: text is editable, but blocks cannot be moved, resized, deleted, or added.
-// Also disables image actions while locked. Autosave + export still work.
+/* scripts/dashboard-sheet.js
+   Grid editor with ghost preview + delayed reflow.
 
-document.addEventListener('DOMContentLoaded', () => {
-  // ---- DOM & State ----
-  const blocksContainer  = document.getElementById('blocks-container');
-  const addBlockBtn      = document.getElementById('add-block-btn');
-  const lockButton       = document.getElementById('lock-toggle-btn');
-  const sheetContainer   = document.getElementById('sheet-container');
-  const formatToolbar    = document.getElementById('format-toolbar');
-  const exportBtn        = document.getElementById('export-btn');
-  const saveStatusBtn    = document.getElementById('save-status-btn');
+   - Drag/resize shows a dashed "ghost" preview
+   - Other blocks DO NOT move until you release
+   - Release commits and triggers reflow (no overlaps)
+   - Press Esc during drag/resize to cancel
+   - Lock hides chrome and disables drag/resize/delete
+*/
 
-  // Force-locked mode
-  // --- at the top near other state ---
-  const FORCE_LOCK = false;   // was true
-  let isLocked = true;        // start locked by default, but allow toggling
-  let ghostEl = null; // ghost for previews (unused while locked, but kept for completeness)
+(() => {
+  'use strict';
 
-  // Saving state
-  let saveTimer = null;
-  let saveInFlight = false;
-  let lastSavedSnapshot = null;
-  const DASH_ID = getDashboardIdFromURL(); // current sheet id
+  // ---------- DOM helpers ----------
+  const qs  = (s) => document.querySelector(s);
+  const qsa = (s) => Array.from(document.querySelectorAll(s));
 
-  // -------- utils --------
-  function fileToDataUrl(file) {
-    return new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result);
-      r.onerror = reject;
-      r.readAsDataURL(file);
-    });
+  const canvas    = qs('#blocks-container') || qs('#sheetCanvas');
+  const titleEl   = qs('#sheet-title')      || qs('#sheetTitle');
+  const exportBtn = qs('#export-btn')       || qs('#exportBtn');
+  const backBtn   = qs('#dash-back')        || qs('#backBtn');
+  const addBtn    = qs('#add-block-btn')    || qs('#addBlockBtn') || qs('#fabAddBtn');
+  const lockBtn   = qs('#lock-toggle-btn')  || qs('#lockToggleBtn') || qs('[data-act="toggle-lock"]');
+  const saveBadge = qs('#save-status-btn')  || qs('#saveStatus')   || qs('#saveBadge');
+  const toolbar   = qs('#format-toolbar')   || null;
+
+  if (!canvas) {
+    console.error('dashboard-sheet.js: canvas not found');
+    return;
   }
 
-  function beginInteractionSelectionGuard() {
-    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-    const sel = window.getSelection && window.getSelection();
-    if (sel && sel.removeAllRanges) sel.removeAllRanges();
-    document.body.classList.add('no-select');
-  }
-  function endInteractionSelectionGuard() {
-    document.body.classList.remove('no-select');
-  }
+  // ---------- State / storage ----------
+  const GRID_COLS = 12;
+  const DASH_ID   = new URLSearchParams(location.search).get('id') || 'dash_tmp';
+  const LS_KEY    = DASH_ID;
 
-  // ========== GRID METRICS ==========
-  function getMetrics() {
-    const cs = getComputedStyle(blocksContainer);
-    const cols = parseInt(cs.getPropertyValue('--grid-columns')) || 12;
-    const gap = parseFloat(cs.gap) || 0;
-    const contentW = blocksContainer.clientWidth;
-    const cellW = (contentW - gap * (cols - 1)) / cols;
-    const rowUnit = parseFloat(cs.getPropertyValue('--row-size')) || 40;
-    return { cols, gap, cellW, rowUnit };
-  }
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const rnd   = (v) => Math.round(v);
+  const uid   = (p='b_') => `${p}${Date.now()}_${Math.floor(Math.random()*1e6)}`;
 
-  // ========== OCCUPANCY & COLLISION ==========
-  function rectsOverlap(a, b) {
-    return !(
-      a.colStart + a.colSpan <= b.colStart ||
-      b.colStart + b.colSpan <= a.colStart ||
-      a.rowStart + a.rowSpan <= b.rowStart ||
-      b.rowStart + b.rowSpan <= a.rowStart
-    );
-  }
-  function getAllRects(excludeEl) {
-    return [...blocksContainer.querySelectorAll('.block')]
-      .filter(el => el !== excludeEl)
-      .map(readRect);
-  }
-  function collides(targetRect, excludeEl) {
-    return getAllRects(excludeEl).some(r => rectsOverlap(targetRect, r));
-  }
-  function dropToFreeRow(rect, excludeEl) {
-    let testRect = { ...rect };
-    while (collides(testRect, excludeEl)) testRect.rowStart += 1;
-    return testRect;
-  }
-  function resolveCollisions(pusherRect, excludeEl) {
-    const victims = getAllRects(excludeEl).filter(r => rectsOverlap(pusherRect, r));
-    victims.sort((a, b) => a.rowStart - b.rowStart);
-    for (const victimRect of victims) {
-      const newRowStart = pusherRect.rowStart + pusherRect.rowSpan;
-      const newVictimRect = { ...victimRect, rowStart: newRowStart };
-      writeRect(victimRect.el, newVictimRect);
-      resolveCollisions(newVictimRect, victimRect.el);
-    }
-  }
+  const load = () => { try { return JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch { return null; } };
+  const save = (obj) => { localStorage.setItem(LS_KEY, JSON.stringify(obj)); setSaved(true); };
 
-  // ========== DATA HELPERS ==========
-  function readRect(el) {
-    if (!el) return null;
-    return {
-      el,
-      colStart: +el.dataset.colStart,
-      rowStart: +el.dataset.rowStart,
-      colSpan: +el.dataset.colSpan,
-      rowSpan: +el.dataset.rowSpan
-    };
-  }
-  function writeRect(el, rect) {
-    if (!el || !rect) return;
-    el.dataset.colStart = rect.colStart;
-    el.dataset.rowStart = rect.rowStart;
-    el.dataset.colSpan = rect.colSpan;
-    el.dataset.rowSpan = rect.rowSpan;
-    el.style.gridColumn = `${rect.colStart} / span ${rect.colSpan}`;
-    el.style.gridRow = `${rect.rowStart} / span ${rect.rowSpan}`;
-  }
+  let dash = load() || { id: LS_KEY, title: 'Untitled', blocks: [] };
+  save(dash);
 
-  // ========== IMAGE BLOCK MODE ==========
-  function makeImageBlock(block, dataUrl) {
-    block.classList.add('image-block');
-    const content = block.querySelector('.block-content');
-    content.innerHTML = '';
-    content.setAttribute('contenteditable', 'false');
-
-    const wrap = document.createElement('div');
-    wrap.className = 'img-wrap';
-    wrap.innerHTML = `
-      <div class="img-actions">
-        <button data-img="replace" title="Replace">Replace</button>
-        <button data-img="remove"  title="Remove">Remove</button>
-        <button data-img="fit"     title="Fit">Fit</button>
-        <button data-img="fill"    title="Fill">Fill</button>
-      </div>
-      <img alt="">
-    `;
-    wrap.querySelector('img').src = dataUrl;
-    content.appendChild(wrap);
-
-    // While locked, disable image resizer/actions entirely
-    if (!isLocked) {
-      bindImageResizer(block);
-      bindImageActions(block);
-    } else {
-      const acts = wrap.querySelector('.img-actions');
-      if (acts) acts.remove();             // no actions in locked mode
-      wrap.style.pointerEvents = 'none';   // no drag/resize on the image area
-    }
-  }
-
-  function revokeImageBlock(block) {
-    block.classList.remove('image-block');
-    const content = block.querySelector('.block-content');
-    content.innerHTML = '';
-    content.setAttribute('contenteditable', 'true');
-    content.focus();
-  }
-
-  function bindImageResizer(block) {
-    if (isLocked) return; // guard
-    const wrap = block.querySelector('.img-wrap');
-    if (!wrap) return;
-    wrap.style.width = '100%';
-    wrap.style.height = '100%';
-
-    const restrictRect = block.querySelector('.block-content');
-
-    interact(wrap).resizable({
-      edges: { right: true, bottom: true, bottomRight: true, top: false, left: false, topLeft: false, topRight: false, bottomLeft: false },
-      listeners: {
-        start() {
-          beginInteractionSelectionGuard();
-          wrap.classList.add('resizing-image');
-          const cs = getComputedStyle(wrap);
-          wrap.dataset.w = parseFloat(cs.width) || wrap.clientWidth;
-          wrap.dataset.h = parseFloat(cs.height) || wrap.clientHeight;
-        },
-        move(evt) {
-          const startW = parseFloat(wrap.dataset.w);
-          const startH = parseFloat(wrap.dataset.h);
-          let w = startW + evt.deltaRect.width;
-          let h = startH + evt.deltaRect.height;
-
-          const bounds = restrictRect.getBoundingClientRect();
-          const wrapRect = wrap.getBoundingClientRect();
-          const maxW = bounds.width - (wrapRect.left - bounds.left);
-          const maxH = bounds.height - (wrapRect.top - bounds.top);
-
-          w = Math.max(40, Math.min(w, maxW));
-          h = Math.max(40, Math.min(h, maxH));
-
-          wrap.style.width = `${w}px`;
-          wrap.style.height = `${h}px`;
-        },
-        end() {
-          wrap.classList.remove('resizing-image');
-          endInteractionSelectionGuard();
-          requestSave();
-        }
-      }
-    });
-  }
-
-  function bindImageActions(block) {
-    if (isLocked) return; // guard
-    const actions = block.querySelector('.img-actions');
-    const wrap = block.querySelector('.img-wrap');
-    const img = wrap?.querySelector('img');
-    if (!actions || !wrap || !img) return;
-
-    actions.addEventListener('click', async (e) => {
-      const btn = e.target.closest('button');
-      if (!btn) return;
-      const act = btn.dataset.img;
-
-      if (act === 'replace') {
-        const inp = document.createElement('input');
-        inp.type = 'file';
-        inp.accept = 'image/*';
-        inp.style.display = 'none';
-        document.body.appendChild(inp);
-        inp.onchange = async () => {
-          const file = inp.files?.[0];
-          if (file) {
-            img.src = await fileToDataUrl(file);
-            requestSave();
-          }
-          inp.remove();
-        };
-        inp.click();
-        return;
-      }
-
-      if (act === 'remove') {
-        revokeImageBlock(block);
-        requestSave();
-        return;
-      }
-
-      if (act === 'fit') {
-        wrap.style.width = '100%';
-        wrap.style.height = '100%';
-        img.style.objectFit = 'contain';
-        requestSave();
-        return;
-      }
-
-      if (act === 'fill') {
-        wrap.style.width = '100%';
-        wrap.style.height = '100%';
-        img.style.objectFit = 'cover';
-        requestSave();
-        return;
-      }
-    });
-  }
-
-  // ========== SAVE / LOAD / EXPORT ==========
-  function getDashboardIdFromURL() {
-    const p = new URLSearchParams(location.search);
-    return p.get('id') || `dash_${Date.now()}`;
-  }
-
-  function markSaving() {
-    saveStatusBtn.textContent = 'Saving...';
-    saveStatusBtn.classList.remove('saved');
-    saveStatusBtn.classList.add('saving');
-  }
-  function markSaved() {
-    saveStatusBtn.textContent = 'Saved';
-    saveStatusBtn.classList.remove('saving');
-    saveStatusBtn.classList.add('saved');
-  }
-
-  function serializeSheet() {
-    const title = document.getElementById('sheet-title')?.textContent?.trim() || 'Untitled Dashboard';
-    const blocks = [...blocksContainer.querySelectorAll('.block')].map(b => {
-      const rect = readRect(b);
-      if (b.classList.contains('image-block')) {
-        const wrap = b.querySelector('.img-wrap');
-        const img = wrap?.querySelector('img');
-        const objFit = img?.style?.objectFit || 'contain';
-        const w = parseFloat(wrap?.style?.width) || null;
-        const h = parseFloat(wrap?.style?.height) || null;
-        return {
-          type: 'image',
-          colStart: rect.colStart, rowStart: rect.rowStart,
-          colSpan: rect.colSpan, rowSpan: rect.rowSpan,
-          src: img?.src || '',
-          objectFit: objFit,
-          wrapSize: (w && h) ? { w, h } : null
-        };
-      } else {
-        return {
-          type: 'text',
-          colStart: rect.colStart, rowStart: rect.rowStart,
-          colSpan: rect.colSpan, rowSpan: rect.rowSpan,
-          html: b.querySelector('.block-content')?.innerHTML || ''
-        };
-      }
-    });
-
-    const payload = { id: DASH_ID, title, blocks };
-    return JSON.stringify(payload);
-  }
-
-  const deepEqualJSON = (a, b) => a === b;
-
-  function saveNow() {
-    if (!DASH_ID) return;
-    const json = serializeSheet();
-    if (deepEqualJSON(json, lastSavedSnapshot)) { markSaved(); return; }
-    markSaving();
-    saveInFlight = true;
-    try {
-      localStorage.setItem(DASH_ID, json);
-      lastSavedSnapshot = json;
-      markSaved();
-    } catch (e) {
-      console.error('Save failed:', e);
-    } finally {
-      saveInFlight = false;
-    }
-  }
-
-  function requestSave(delay = 400) {
-    if (saveTimer) clearTimeout(saveTimer);
-    markSaving();
-    saveTimer = setTimeout(saveNow, delay);
-  }
-
-  // Accept {colStart/...} or {x,y,w,h} and provide sane defaults
-  function normalizeRect(b, index = 0) {
-    const ns = n => Number.isFinite(n) ? n : null;
-
-    let colStart = ns(b.colStart);
-    let rowStart = ns(b.rowStart);
-    let colSpan  = ns(b.colSpan);
-    let rowSpan  = ns(b.rowSpan);
-
-    // Fallback from x/y/w/h (x,y assumed 0-based -> grid is 1-based)
-    if (colStart == null && Number.isFinite(b.x)) colStart = b.x + 1;
-    if (rowStart == null && Number.isFinite(b.y)) rowStart = b.y + 1;
-    if (colSpan  == null && Number.isFinite(b.w)) colSpan  = b.w;
-    if (rowSpan  == null && Number.isFinite(b.h)) rowSpan  = b.h;
-
-    // Final defaults if still missing
-    if (colSpan == null)  colSpan  = 12;
-    if (rowSpan == null)  rowSpan  = 2;
-    if (colStart == null) colStart = 1;
-    if (rowStart == null) rowStart = 1 + index * (rowSpan + 1);
-
-    return { colStart, rowStart, colSpan, rowSpan };
-  }
-
-  
-  function applySheetData(data) {
-    const titleEl = document.getElementById('sheet-title');
-    if (titleEl && data.title) titleEl.textContent = data.title;
-
-    blocksContainer.innerHTML = '';
-    (data.blocks || []).forEach((b, i) => {
-      const el = document.createElement('div');
-      el.className = 'block';
-      el.innerHTML = `
-        <div class="block-content" contenteditable="true"></div>
-        <button class="delete-btn" title="Delete Block">×</button>
-        <div class="resize-handle right"></div>
-        <div class="resize-handle bottom"></div>
-        <div class="resize-handle bottom-right"></div>
-      `;
-
-      // NEW: normalize before placing
-      const rect = normalizeRect(b, i);
-      writeRect(el, rect);
-      blocksContainer.appendChild(el);
-
-      if (b.type === 'image') {
-        makeImageBlock(el, b.src || '');
-        const wrap = el.querySelector('.img-wrap');
-        if (b.objectFit) wrap.querySelector('img').style.objectFit = b.objectFit;
-        if (b.wrapSize?.w && b.wrapSize?.h) {
-          wrap.style.width = b.wrapSize.w + '%';
-          wrap.style.height = b.wrapSize.h + '%';
-        }
-      } else {
-        el.querySelector('.block-content').innerHTML = b.html || '';
-      }
-    });
-
-    // after load, mark as saved
-    lastSavedSnapshot = serializeSheet();
-    markSaved();
-  }
-
-
-  function loadOrInit() {
-    const raw = localStorage.getItem(DASH_ID);
-    if (raw) {
-      try { applySheetData(JSON.parse(raw)); return; }
-      catch (e) { console.warn('Failed to parse saved dashboard; starting fresh.', e); }
-    }
-    // Starter block even when locked, so there is editable text
-    const starter = document.createElement('div');
-    starter.className = 'block';
-    starter.innerHTML = `
-      <div class="block-content" contenteditable="true">Start typing...</div>
-      <button class="delete-btn" title="Delete Block">×</button>
-      <div class="resize-handle right"></div>
-      <div class="resize-handle bottom"></div>
-      <div class="resize-handle bottom-right"></div>
-    `;
-    writeRect(starter, dropToFreeRow({ colStart: 1, rowStart: 1, colSpan: 4, rowSpan: 4 }, null));
-    blocksContainer.appendChild(starter);
-    bindBlockEvents(starter);
-    if (isLocked) {
-      starter.querySelector('.delete-btn')?.remove();
-      starter.querySelectorAll('.resize-handle')?.forEach(h => h.remove());
-    }
-    requestSave(0);
-  }
-
-  function exportCurrentSheet() {
-    try {
-      const json = serializeSheet();
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      const safeTitle = (document.getElementById('sheet-title')?.textContent || 'dashboard')
-        .trim().replace(/[^\w\-]+/g, '_');
-      a.href = url;
-      a.download = `${safeTitle || 'dashboard'}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error('Export failed:', e);
-    }
-  }
-
-  // ========== GHOST PREVIEW ==========
-  function updateGhost(rect) {
-    if (!ghostEl) {
-      ghostEl = document.createElement('div');
-      ghostEl.className = 'block-ghost';
-      blocksContainer.appendChild(ghostEl);
-    }
-    writeRect(ghostEl, rect);
-  }
-  function removeGhost() {
-    if (ghostEl) ghostEl.remove();
-    ghostEl = null;
-  }
-
-  // ========== BLOCK CREATION ==========
-  function createNewBlock() {
-    if (isLocked) return; // locked mode: cannot add blocks
-    const rect = dropToFreeRow({ colStart: 1, rowStart: 1, colSpan: 4, rowSpan: 4 }, null);
-    const block = document.createElement('div');
-    block.className = 'block';
-    block.innerHTML = `
-      <div class="block-content" contenteditable="true"></div>
-      <button class="delete-btn" title="Delete Block">×</button>
-      <div class="resize-handle right"></div>
-      <div class="resize-handle bottom"></div>
-      <div class="resize-handle bottom-right"></div>
-    `;
-    writeRect(block, rect);
-    blocksContainer.appendChild(block);
-    bindBlockEvents(block);
-    block.querySelector('.block-content').focus();
-  }
-
-  // ========== BIND INTERACT.JS EVENTS ==========
-  function bindBlockEvents(el) {
-    // Text remains editable even when locked
-    const content = el.querySelector('.block-content');
-
-    if (!isLocked) {
-      // Only enable drag/resize when unlocked
-      interact(el)
-        .draggable({
-          hold: 250,
-          allowFrom: el,
-          ignoreFrom: 'button, .resize-handle',
-          listeners: {
-            start: e => {
-              beginInteractionSelectionGuard();
-              e.target.classList.add('dragging-active');
-              e.target.setAttribute('data-start-rect', JSON.stringify(readRect(e.target)));
-              updateGhost(readRect(e.target));
-            },
-            move: dragMove,
-            end: e => {
-              endInteractionSelectionGuard();
-              dragEnd(e);
-            }
-          }
-        })
-        .resizable({
-          edges: { top: false, left: false, bottom: true, right: true },
-          listeners: {
-            start: e => {
-              beginInteractionSelectionGuard();
-              e.target.classList.add('resizing-active');
-              updateGhost(readRect(e.target));
-              e.target.setAttribute('data-start-rect', JSON.stringify(readRect(e.target)));
-            },
-            move: resizeMove,
-            end: e => {
-              endInteractionSelectionGuard();
-              resizeEnd(e);
-            }
-          }
-        });
-
-      el.querySelector('.delete-btn')?.addEventListener('click', () => {
-        el.remove();
-        requestSave();
+  if (titleEl) {
+    titleEl.textContent = dash.title || 'Untitled';
+    if (titleEl.isContentEditable) {
+      titleEl.addEventListener('input', () => {
+        dash.title = (titleEl.textContent || '').trim() || 'Untitled';
+        setSaved(false);
+        debouncedSave();
       });
     }
-
-    // Save on text edits in both modes
-    content.addEventListener('input', () => requestSave());
-    content.addEventListener('blur', () => requestSave());
-
-    // PASTE / DROP: in locked mode allow plain text only (no image conversion)
-    content.addEventListener('paste', async (e) => {
-      if (!isLocked) {
-        const cd = e.clipboardData;
-        if (!cd) return;
-
-        const file = [...cd.files].find(f => f.type.startsWith('image/'));
-        if (file) {
-          e.preventDefault();
-          const url = await fileToDataUrl(file);
-          makeImageBlock(el, url);
-          requestSave();
-          return;
-        }
-
-        const html = cd.getData('text/html');
-        if (html) {
-          const temp = document.createElement('div');
-          temp.innerHTML = html;
-          const pastedImg = temp.querySelector('img[src]');
-          if (pastedImg?.src) {
-            e.preventDefault();
-            makeImageBlock(el, pastedImg.src);
-            requestSave();
-            return;
-          }
-        }
-        if (el.classList.contains('image-block')) e.preventDefault();
-      }
-      // locked: fall through to default behavior → text paste works
-    });
-
-    content.addEventListener('dragover', (e) => {
-      if (!isLocked) e.preventDefault();
-    });
-    content.addEventListener('drop', async (e) => {
-      if (isLocked) return; // ignore drops while locked
-      e.preventDefault();
-      const dt = e.dataTransfer;
-
-      const file = [...(dt.files || [])].find(f => f.type.startsWith('image/'));
-      if (file) {
-        const url = await fileToDataUrl(file);
-        makeImageBlock(el, url);
-        requestSave();
-        return;
-      }
-
-      const html = dt.getData('text/html');
-      if (html) {
-        const temp = document.createElement('div');
-        temp.innerHTML = html;
-        const droppedImg = temp.querySelector('img[src]');
-        if (droppedImg?.src) {
-          makeImageBlock(el, droppedImg.src);
-          requestSave();
-          return;
-        }
-      }
-    });
-
-    // When locked and block is in image mode, block typing (can’t edit image)
-    content.addEventListener('keydown', (e) => {
-      if (!el.classList.contains('image-block')) return;
-      if (isLocked) {
-        // fully block typing while image mode in locked state
-        e.preventDefault();
-        return;
-      }
-      // unlocked behavior below:
-      if (e.key === 'Backspace' || e.key === 'Delete') {
-        e.preventDefault();
-        revokeImageBlock(el);
-        requestSave();
-        return;
-      }
-      e.preventDefault();
-    });
   }
 
-  // --- DRAG/RESIZE LISTENERS (only used when unlocked) ---
-  function dragMove(e) {
-    const metrics = getMetrics();
-    const originalRect = readRect(e.target);
-    const dx = e.pageX - e.x0;
-    const dy = e.pageY - e.y0;
-
-    const colShift = Math.round(dx / (metrics.cellW + metrics.gap));
-    const rowShift = Math.round(dy / (metrics.rowUnit + metrics.gap));
-
-    let ghostRect = {
-      ...originalRect,
-      colStart: originalRect.colStart + colShift,
-      rowStart: originalRect.rowStart + rowShift
-    };
-
-    ghostRect.colStart = Math.max(1, Math.min(ghostRect.colStart, metrics.cols - ghostRect.colSpan + 1));
-    ghostRect.rowStart = Math.max(1, ghostRect.rowStart);
-
-    updateGhost(ghostRect);
+  // ---------- Grid metrics ----------
+  let unitW = 0, unitH = 0;
+  function measureUnits() {
+    const probe = document.createElement('div');
+    probe.style.gridColumn = '1 / span 1';
+    probe.style.gridRow    = '1 / span 1';
+    probe.style.visibility = 'hidden';
+    probe.style.pointerEvents = 'none';
+    canvas.appendChild(probe);
+    const r = probe.getBoundingClientRect();
+    unitW = canvas.clientWidth / GRID_COLS;
+    unitH = r.height || 40;
+    probe.remove();
   }
 
-  function dragEnd(e) {
-    const el = e.target;
-    el.classList.remove('dragging-active');
+  // ---------- Save badge ----------
+  let saveTimer = null;
+  function debouncedSave(){ clearTimeout(saveTimer); saveTimer = setTimeout(() => save(dash), 250); }
+  function setSaved(ok){ if (saveBadge){ saveBadge.textContent = ok ? 'Saved' : 'Unsaved'; saveBadge.classList.toggle('unsaved', !ok); } }
+  function dirty(){ setSaved(false); debouncedSave(); }
 
-    const startRect = JSON.parse(el.getAttribute('data-start-rect') || 'null');
-    el.removeAttribute('data-start-rect');
+  // ---------- Normalization / placement ----------
+  function normalize(b){
+    const n = { ...b };
+    if (n.colStart == null && n.x != null) n.colStart = n.x + 1;
+    if (n.rowStart == null && n.y != null) n.rowStart = n.y + 1;
+    if (n.colSpan  == null && n.w != null) n.colSpan  = n.w;
+    if (n.rowSpan  == null && n.h != null) n.rowSpan  = n.h;
 
-    const finalRect = ghostEl ? readRect(ghostEl) : null;
-    removeGhost();
-    if (!finalRect) return;
-
-    const { cols } = getMetrics();
-    const overRight = finalRect.colStart + finalRect.colSpan - 1 > cols;
-    if (overRight) { if (startRect) writeRect(el, startRect); return; }
-
-    const pushedRect = dropToFreeRow(finalRect, el);
-    writeRect(el, pushedRect);
-    resolveCollisions(pushedRect, el);
-    requestSave();
+    n.colStart = clamp(parseInt(n.colStart || 1, 10), 1, GRID_COLS);
+    n.colSpan  = clamp(parseInt(n.colSpan  || 3, 10), 1, GRID_COLS);
+    n.rowStart = Math.max(1, parseInt(n.rowStart || 1, 10));
+    n.rowSpan  = Math.max(1, parseInt(n.rowSpan  || 3, 10));
+    n.id   ||= uid();
+    n.type ||= 'text';
+    return n;
+  }
+  function placeCSS(el, b){
+    el.style.gridColumn = `${b.colStart} / span ${b.colSpan}`;
+    el.style.gridRow    = `${b.rowStart} / span ${b.rowSpan}`;
   }
 
-  function resizeMove(e) {
-    const metrics = getMetrics();
-    const startRect = JSON.parse(e.target.getAttribute('data-start-rect'));
-    let newRect = { ...startRect };
+  // ---------- Collision helpers & reflow ----------
+  const right   = (b) => b.colStart + b.colSpan;
+  const bottom  = (b) => b.rowStart + b.rowSpan;
+  const cOverlap= (a,b) => (a.colStart < right(b)) && (b.colStart < right(a));
+  const rOverlap= (a,b) => (a.rowStart < bottom(b)) && (b.rowStart < bottom(a));
+  const overlaps= (a,b) => cOverlap(a,b) && rOverlap(a,b);
 
-    if (e.edges.right) {
-      const colSpanByPx = Math.round(e.rect.width / (metrics.cellW + metrics.gap));
-      newRect.colSpan = Math.max(1, colSpanByPx);
+  // First free top row for 'b' against 'placed'
+  function topFreeRowFor(b, placed){
+    let y = Math.max(1, b.rowStart);
+    while (true) {
+      const hit = placed.find(p =>
+        cOverlap(b, p) &&
+        (y < bottom(p)) && (p.rowStart < y + b.rowSpan)
+      );
+      if (!hit) return y;
+      y = bottom(hit);
     }
-    if (e.edges.bottom) {
-      const rowSpanByPx = Math.round(e.rect.height / (metrics.rowUnit + metrics.gap));
-      newRect.rowSpan = Math.max(1, rowSpanByPx);
-    }
-
-    if (newRect.colStart + newRect.colSpan - 1 > metrics.cols) {
-      newRect.colSpan = metrics.cols - newRect.colStart + 1;
-    }
-
-    updateGhost(newRect);
   }
 
-  function resizeEnd(e) {
-    const el = e.target;
-    el.classList.remove('resizing-active');
-    el.removeAttribute('data-start-rect');
-
-    const finalRect = readRect(ghostEl);
-    removeGhost();
-    if (!finalRect) return;
-
-    writeRect(el, finalRect);
-    resolveCollisions(finalRect, el);
-    requestSave();
-  }
-
-  // ========== UI & WIRING ==========
-    function setInteractivityEnabled(enabled) {
-    // enable/disable drag+resize and controls on every block
-    document.querySelectorAll('.block').forEach((el) => {
-        // InteractJS toggles
-        interact(el).draggable({ enabled });
-        interact(el).resizable({ enabled });
-
-        // UI affordances
-        el.querySelector('.delete-btn')?.classList.toggle('hidden', !enabled);
-        el.querySelectorAll('.resize-handle')?.forEach(h => h.classList.toggle('hidden', !enabled));
-
-        // Image actions / resizing are handled by CSS (see snippet below)
+  // Pack blocks downward so none overlap
+  function reflow(priority) {
+    const blocks = dash.blocks;
+    const ordered = blocks.slice().sort((a,b)=>{
+      if (priority){
+        if (a.id === priority.id) return -1;
+        if (b.id === priority.id) return  1;
+      }
+      const dr = a.rowStart - b.rowStart;
+      return dr !== 0 ? dr : (a.colStart - b.colStart);
     });
-    // text remains editable in both modes (except image-blocks)
-    document.querySelectorAll('.block .block-content').forEach(content => {
-        const inImage = content.closest('.image-block');
-        content.setAttribute('contenteditable', String(!inImage)); // text blocks editable
-    });
+
+    const placed=[]; let changed=false;
+    for (const b of ordered) {
+      if (priority && b.id === priority.id) { placed.push(b); continue; }
+      const want = b.rowStart;
+      const y = topFreeRowFor(b, placed);
+      if (y !== want){ b.rowStart = y; changed = true; }
+      placed.push(b);
     }
-
-    function applyLockedUI() {
-    sheetContainer.classList.toggle('is-locked', isLocked);
-    lockButton.textContent = isLocked ? '🔒 Locked' : '🔓 Unlocked';
-
-    // Enable/disable interactivity
-    setInteractivityEnabled(!isLocked);
-
-    // Add Block button only when unlocked
-    if (addBlockBtn) {
-        addBlockBtn.classList.toggle('hidden', isLocked);
-        addBlockBtn.disabled = isLocked;
+    if (changed){
+      qsa('.block').forEach(el=>{
+        const bid = el.dataset.bid;
+        const bb = blocks.find(x => x.id === bid);
+        if (bb) placeCSS(el, bb);
+      });
     }
+    if (changed) dirty();
+  }
+
+  // ---------- Lock ----------
+  let isLocked = !!dash.isLocked;
+  function setLocked(v){
+    isLocked = !!v;
+    dash.isLocked = isLocked;
+    document.documentElement.classList.toggle('sheet-locked', isLocked);
+    if (lockBtn) lockBtn.textContent = isLocked ? 'Locked' : 'Unlocked';
+    qsa('.block .handle, .block .close').forEach(el => { el.style.display = isLocked ? 'none' : ''; });
+  }
+
+  // ---------- Ghost preview ----------
+  let ghostEl = null;
+  function ensureGhost(){
+    if (!ghostEl){
+      ghostEl = document.createElement('div');
+      ghostEl.className = 'block-ghost';
+      Object.assign(ghostEl.style, {
+        pointerEvents: 'none',
+        border: '2px dashed rgba(0,0,0,.35)',
+        borderRadius: '8px',
+        background: 'transparent',
+        zIndex: '3'
+      });
+      canvas.appendChild(ghostEl);
     }
+  }
+  function showGhost(c, r, w, h){
+    ensureGhost();
+    ghostEl.style.display = '';
+    ghostEl.style.gridColumn = `${c} / span ${w}`;
+    ghostEl.style.gridRow    = `${r} / span ${h}`;
+  }
+  function hideGhost(){
+    if (ghostEl) ghostEl.style.display = 'none';
+  }
 
-    function toggleLock() {
-    if (FORCE_LOCK) return;      // safety guard (now false)
-    isLocked = !isLocked;
-    applyLockedUI();
-    }
+  // ---------- Drag with preview ----------
+  let drag = null; // { el, block, startC, startR, startX, startY, committed }
+  let cancelOp = false;
 
+  function onDragStart(e, el, block){
+    if (isLocked) return;
+    if (e.button !== 0) return;
 
-  exportBtn?.addEventListener('click', exportCurrentSheet);
+    const path = e.composedPath ? e.composedPath() : (e.path || []);
+    if (path.some(n => n && n.isContentEditable)) return;
 
-  formatToolbar.addEventListener('click', (e) => {
-    const cmd = e.target.closest('button')?.dataset.command;
-    if (cmd) document.execCommand(cmd, false, null);
-  });
-  formatToolbar.addEventListener('change', (e) => {
-    const sel = e.target.closest('select');
-    if (sel?.dataset.command === 'formatBlock') {
-      document.execCommand(sel.dataset.command, false, sel.value);
-    }
-  });
-
-  // Back button that navigates up the folder hierarchy
-  document.getElementById('dash-back')?.addEventListener('click', (e) => {
     e.preventDefault();
+    cancelOp = false;
+    drag = { el, block, startC:block.colStart, startR:block.rowStart, startX:e.clientX, startY:e.clientY, committed:false };
+    document.addEventListener('pointermove', onDragMove);
+    document.addEventListener('pointerup', onDragEnd, { once:true });
+    document.addEventListener('keydown', onOpKey, { once:true });
 
-    // Helper to find the parent of a node in the tree
-    function findParentOf(node, targetId) {
-      if (node.type !== 'folder' || !Array.isArray(node.children)) return null;
-      for (const child of node.children) {
-        if (child.id === targetId) return node; // This node is the parent
-        if (child.type === 'folder') {
-          const deep = findParentOf(child, targetId);
-          if (deep) return deep;
-        }
-      }
-      return null;
+    // show ghost at starting place; don't move the real block yet
+    showGhost(block.colStart, block.rowStart, block.colSpan, block.rowSpan);
+  }
+  function onDragMove(e){
+    if (!drag) return;
+    const dCols = rnd((e.clientX - drag.startX) / (unitW || 1));
+    const dRows = rnd((e.clientY - drag.startY) / (unitH || 1));
+
+    const nc = clamp(drag.startC + dCols, 1, GRID_COLS - drag.block.colSpan + 1);
+    const nr = Math.max(1, drag.startR + dRows);
+
+    // Move ONLY the ghost
+    showGhost(nc, nr, drag.block.colSpan, drag.block.rowSpan);
+  }
+  function onDragEnd(){
+    document.removeEventListener('pointermove', onDragMove);
+    hideGhost();
+
+    if (!drag) return;
+    if (cancelOp){ drag=null; return; } // Esc pressed => revert
+
+    // Read ghost (final preview) by parsing its grid; or recompute from last delta
+    // Safer to recompute from last pointer delta stored on ghost via dataset? We'll just compute from its style.
+    // However style values are strings; we can store in drag during move:
+    const styles = ghostEl && ghostEl.style.display !== 'none' ? ghostEl.style : null;
+    let nc = drag.block.colStart, nr = drag.block.rowStart;
+    if (styles) {
+      // grid-column: "<c> / span <w>"; grid-row: "<r> / span <h>"
+      const gc = styles.gridColumn.split('/');
+      const gr = styles.gridRow.split('/');
+      if (gc.length >= 1) nc = parseInt(gc[0].trim(),10) || nc;
+      if (gr.length >= 1) nr = parseInt(gr[0].trim(),10) || nr;
     }
 
-    try {
-      const treeRaw = localStorage.getItem('dash_tree_v1');
-      if (treeRaw) {
-        const tree = JSON.parse(treeRaw);
-        const parent = findParentOf(tree, DASH_ID); // DASH_ID is already defined in the script
-        if (parent && parent.id !== 'root') {
-          // Go to the parent folder view
-          window.location.href = `view-dashboards.html?folder=${parent.id}`;
-          return;
-        }
-      }
-    } catch (err) {
-      console.error("Could not determine parent folder, falling back.", err);
+    // Commit block move
+    drag.block.colStart = nc;
+    drag.block.rowStart = nr;
+    placeCSS(drag.el, drag.block);
+
+    // Now push others (single reflow)
+    reflow(drag.block);
+    dirty();
+    drag=null;
+  }
+
+  // ---------- Resize with preview ----------
+  let rez = null; // { el, block, edge, startX, startY, startC, startR, startW, startH }
+
+  function onResizeStart(e, el, block, edge){
+    if (isLocked) return;
+    e.preventDefault(); e.stopPropagation();
+    cancelOp = false;
+
+    rez = {
+      el, block, edge,
+      startX:e.clientX, startY:e.clientY,
+      startC:block.colStart, startR:block.rowStart,
+      startW:block.colSpan,  startH:block.rowSpan
+    };
+    document.addEventListener('pointermove', onResizeMove);
+    document.addEventListener('pointerup', onResizeEnd, { once:true });
+    document.addEventListener('keydown', onOpKey, { once:true });
+
+    // Show ghost of starting rect
+    showGhost(block.colStart, block.rowStart, block.colSpan, block.rowSpan);
+  }
+  function onResizeMove(e){
+    if (!rez) return;
+    const dx = e.clientX - rez.startX;
+    const dy = e.clientY - rez.startY;
+    let dCols = rnd(dx / (unitW || 1));
+    let dRows = rnd(dy / (unitH || 1));
+
+    let c = rez.block.colStart, r = rez.block.rowStart;
+    let w = rez.block.colSpan,  h = rez.block.rowSpan;
+
+    if (rez.edge.includes('r')) w = clamp(rez.startW + dCols, 1, GRID_COLS - rez.startC + 1);
+    if (rez.edge.includes('b')) h = Math.max(1, rez.startH + dRows);
+
+    if (rez.edge.includes('l')) {
+      const newC = clamp(rez.startC + dCols, 1, rez.startC + rez.startW - 1);
+      w = rez.startW + (rez.startC - newC);
+      c = newC;
     }
-    
-    // Default fallback to the root dashboard view
-    window.location.href = 'view-dashboards.html';
-  });
+    if (rez.edge.includes('t')) {
+      const newR = Math.max(1, rez.startR + dRows);
+      h = rez.startH + (rez.startR - newR);
+      r = newR;
+    }
 
-  // Lock button still present but inert in forced mode
-  lockButton?.addEventListener('click', toggleLock);
-  addBlockBtn?.addEventListener('click', createNewBlock); // will no-op while locked
+    // Update ONLY ghost
+    showGhost(c, r, w, h);
+  }
+  function onResizeEnd(){
+    document.removeEventListener('pointermove', onResizeMove);
+    hideGhost();
 
-  // Title changes save
-  document.getElementById('sheet-title')?.addEventListener('input', () => requestSave());
-  document.getElementById('sheet-title')?.addEventListener('blur', () => requestSave());
+    if (!rez) return;
+    if (cancelOp){ rez=null; return; } // Esc => revert
 
-  // Initial setup
-  applyLockedUI();
-  loadOrInit();
-});
+    // Commit to ghost's final rect
+    const gc = ghostEl && ghostEl.style.gridColumn.split('/');
+    const gr = ghostEl && ghostEl.style.gridRow.split('/');
+    let c = rez.block.colStart, r = rez.block.rowStart, w = rez.block.colSpan, h = rez.block.rowSpan;
+    if (gc && gc.length >= 2) { c = parseInt(gc[0].trim(),10) || c; w = parseInt(gc[1].replace('span','').trim(),10) || w; }
+    if (gr && gr.length >= 2) { r = parseInt(gr[0].trim(),10) || r; h = parseInt(gr[1].replace('span','').trim(),10) || h; }
+
+    Object.assign(rez.block, { colStart:c, rowStart:r, colSpan:w, rowSpan:h });
+    placeCSS(rez.el, rez.block);
+
+    // Single reflow after commit
+    reflow(rez.block);
+    dirty();
+    rez=null;
+  }
+
+  // Cancel current op with Esc
+  function onOpKey(e){
+    if (e.key !== 'Escape') return;
+    cancelOp = true;
+    // Cleanup listeners + ghost; leave blocks unchanged
+    hideGhost();
+    if (drag) {
+      document.removeEventListener('pointermove', onDragMove);
+      drag=null;
+    }
+    if (rez) {
+      document.removeEventListener('pointermove', onResizeMove);
+      rez=null;
+    }
+  }
+
+  // ---------- Render blocks ----------
+  function makeBlockEl(block){
+    const el = document.createElement('div');
+    el.className = 'block';
+    el.dataset.bid = block.id;
+    el.style.position = 'relative';
+    el.style.paddingTop = '0';
+    placeCSS(el, block);
+
+    const content = document.createElement('div');
+    content.className = 'content';
+    content.style.height = '100%';
+    content.style.display = 'flex';
+    content.style.flexDirection = 'column';
+    content.style.justifyContent = 'center';
+
+    if (block.type === 'image') {
+      const img = document.createElement('img');
+      img.alt = block.alt || '';
+      img.style.maxWidth  = '100%';
+      img.style.maxHeight = '100%';
+      img.style.objectFit = block.objectFit || 'contain';
+      img.src = block.src || '';
+      content.appendChild(img);
+
+      content.addEventListener('click', () => {
+        if (isLocked) return;
+        const url = prompt('Image URL:', block.src || '');
+        if (url == null) return;
+        block.src = url.trim();
+        img.src   = block.src;
+        dirty();
+      });
+    } else {
+      const inner = document.createElement('div');
+      inner.className = 'text';
+      inner.setAttribute('contenteditable', 'true');
+      inner.style.marginBlockStart = '0';
+      inner.innerHTML = block.html || '';
+      inner.addEventListener('input', () => { block.html = inner.innerHTML; dirty(); });
+      content.appendChild(inner);
+    }
+
+    // Resize handles (minimal inline so always visible)
+    const addHandle = (cls, edge, styleObj) => {
+      const h = document.createElement('div');
+      h.className = `handle ${cls}`;
+      Object.assign(h.style, {
+        position: 'absolute',
+        width: '12px', height: '12px',
+        background: 'rgba(0,0,0,.12)',
+        borderRadius: '6px',
+        zIndex: '5',
+        ...styleObj,
+      });
+      h.title = 'Resize';
+      h.addEventListener('pointerdown', (e) => onResizeStart(e, el, block, edge));
+      el.appendChild(h);
+    };
+    addHandle('h-t', 't',  { top: '-6px', left: '50%', transform: 'translateX(-50%)', cursor:'ns-resize' });
+    addHandle('h-r', 'r',  { right:'-6px', top:'50%', transform:'translateY(-50%)', cursor:'ew-resize' });
+    addHandle('h-b', 'b',  { bottom:'-6px', left:'50%', transform:'translateX(-50%)', cursor:'ns-resize' });
+    addHandle('h-l', 'l',  { left:'-6px', top:'50%', transform:'translateY(-50%)', cursor:'ew-resize' });
+    addHandle('h-tr','tr', { right:'-6px', top:'-6px', cursor:'ne-resize' });
+    addHandle('h-br','br', { right:'-6px', bottom:'-6px', cursor:'se-resize' });
+    addHandle('h-bl','bl', { left:'-6px', bottom:'-6px', cursor:'sw-resize' });
+    addHandle('h-tl','tl', { left:'-6px', top:'-6px', cursor:'nw-resize' });
+
+    // Delete button (top-right)
+    const close = document.createElement('button');
+    close.className = 'close';
+    close.type = 'button';
+    close.textContent = '×';
+    Object.assign(close.style, {
+      position: 'absolute',
+      top:'4px', right:'4px',
+      width:'22px', height:'22px',
+      lineHeight:'20px', textAlign:'center',
+      borderRadius:'11px', border:'none',
+      background:'rgba(0,0,0,.15)', color:'#000',
+      cursor:'pointer', zIndex:'6'
+    });
+    close.title = 'Delete block';
+    close.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (isLocked) return;
+      if (!confirm('Delete this block?')) return;
+      const i = dash.blocks.findIndex(b => b.id === block.id);
+      if (i >= 0) dash.blocks.splice(i, 1);
+      el.remove();
+      reflow(null);
+      dirty();
+    });
+
+    el.appendChild(content);
+    el.appendChild(close);
+
+    el.addEventListener('pointerdown', (e) => onDragStart(e, el, block));
+
+    if (isLocked) {
+      qsa('.handle, .close', el).forEach(h => h.style.display = 'none');
+    }
+    return el;
+  }
+
+  function renderAll(){
+    canvas.innerHTML = '';
+    measureUnits();
+    dash.blocks = (dash.blocks || []).map(normalize);
+    dash.blocks.forEach(b => canvas.appendChild(makeBlockEl(b)));
+    // initial cleanup just in case
+    reflow(null);
+    setLocked(isLocked);
+  }
+
+  // ---------- Add blocks ----------
+  function addTextBlock({ c=1, r=1, w=3, h=3, html='' } = {}){
+    const b = normalize({ id: uid(), type:'text', colStart:c, rowStart:r, colSpan:w, rowSpan:h, html });
+    dash.blocks.push(b);
+    canvas.appendChild(makeBlockEl(b));
+    reflow(b);
+    dirty();
+  }
+  function addImageBlock({ c=1, r=1, w=4, h=4, src='' } = {}){
+    const b = normalize({ id: uid(), type:'image', colStart:c, rowStart:r, colSpan:w, rowSpan:h, src, objectFit:'contain' });
+    dash.blocks.push(b);
+    canvas.appendChild(makeBlockEl(b));
+    reflow(b);
+    dirty();
+  }
+
+  // ---------- Toolbar (neutral formatting) ----------
+  function exec(cmd, val=null){ document.execCommand(cmd, false, val); }
+  if (toolbar) {
+    toolbar.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-command]');
+      if (!btn) return;
+      const cmd = btn.dataset.command;
+      const val = btn.dataset.value || null;
+      if (cmd === 'formatBlock') document.execCommand('formatBlock', false, val || 'P');
+      else exec(cmd, val);
+    });
+    const formatSel = toolbar.querySelector('select[data-command="formatBlock"]');
+    if (formatSel) formatSel.addEventListener('change', () => document.execCommand('formatBlock', false, formatSel.value || 'P'));
+  }
+
+  // ---------- Buttons ----------
+  if (lockBtn) lockBtn.addEventListener('click', () => { setLocked(!isLocked); dirty(); });
+  if (backBtn) backBtn.addEventListener('click', () => history.back());
+  if (addBtn) {
+    addBtn.addEventListener('click', () => {
+      const t = prompt('Add new block: "text" or "image"', 'text');
+      if (!t) return;
+      if (t.toLowerCase().startsWith('i')) addImageBlock({ w:4, h:4 });
+      else addTextBlock({ w:3, h:3 });
+    });
+  }
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(dash, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = (dash.title || 'dashboard') + '.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+  }
+
+  // ---------- Init ----------
+  window.addEventListener('resize', measureUnits);
+  renderAll();
+
+  // Expose helpers
+  window.__sheet = {
+    get data(){ return dash; },
+    set data(v){ dash = v; renderAll(); dirty(); },
+    addTextBlock, addImageBlock, renderAll, setLocked, reflow
+  };
+})();
