@@ -3,7 +3,7 @@
 
    - Drag/resize shows a dashed "ghost" preview
    - Other blocks DO NOT move until you release
-   - Release commits and triggers reflow (no overlaps)
+   - Release commits and triggers reflow (no overlaps, no vertical gaps)
    - Press Esc during drag/resize to cancel
    - Lock hides chrome and disables drag/resize/delete
 */
@@ -42,18 +42,6 @@
   const save = (obj) => { localStorage.setItem(LS_KEY, JSON.stringify(obj)); setSaved(true); };
 
   let dash = load() || { id: LS_KEY, title: 'Untitled', blocks: [] };
-  save(dash);
-
-  if (titleEl) {
-    titleEl.textContent = dash.title || 'Untitled';
-    if (titleEl.isContentEditable) {
-      titleEl.addEventListener('input', () => {
-        dash.title = (titleEl.textContent || '').trim() || 'Untitled';
-        setSaved(false);
-        debouncedSave();
-      });
-    }
-  }
 
   // ---------- Grid metrics ----------
   let unitW = 0, unitH = 0;
@@ -97,28 +85,33 @@
     el.style.gridRow    = `${b.rowStart} / span ${b.rowSpan}`;
   }
 
-  // ---------- Collision helpers & reflow ----------
+  // ---------- Collision helpers ----------
   const right   = (b) => b.colStart + b.colSpan;
   const bottom  = (b) => b.rowStart + b.rowSpan;
   const cOverlap= (a,b) => (a.colStart < right(b)) && (b.colStart < right(a));
   const rOverlap= (a,b) => (a.rowStart < bottom(b)) && (b.rowStart < bottom(a));
   const overlaps= (a,b) => cOverlap(a,b) && rOverlap(a,b);
 
-  // First free top row for 'b' against 'placed'
-  function topFreeRowFor(b, placed){
-    let y = Math.max(1, b.rowStart);
+  // ---------- "Add-at-bottom" lock ----------
+  // Newly added blocks get a temporary min-row "lock" so initial autosnap won't pull them upward.
+  const minRowLock = new Map(); // id -> minRow
+
+  // ---------- Pack-up helpers ----------
+  // First free top row for 'b' against 'placed', starting from startAt (default 1)
+  function topFreeRowFor(b, placed, startAt = 1){
+    let y = Math.max(1, startAt);
     while (true) {
       const hit = placed.find(p =>
-        cOverlap(b, p) &&
-        (y < bottom(p)) && (p.rowStart < y + b.rowSpan)
+        (b.colStart < (p.colStart + p.colSpan)) && (p.colStart < (b.colStart + b.colSpan)) &&
+        (y < (p.rowStart + p.rowSpan)) && (p.rowStart < y + b.rowSpan)
       );
       if (!hit) return y;
-      y = bottom(hit);
+      y = (hit.rowStart + hit.rowSpan);
     }
   }
 
-  // Pack blocks downward so none overlap
-  function reflow(priority) {
+  // Pack blocks upward so none overlap AND no vertical gaps remain
+  function reflow(priority, packUp = true) {
     const blocks = dash.blocks;
     const ordered = blocks.slice().sort((a,b)=>{
       if (priority){
@@ -131,20 +124,62 @@
 
     const placed=[]; let changed=false;
     for (const b of ordered) {
-      if (priority && b.id === priority.id) { placed.push(b); continue; }
+      const isPriority = !!priority && b.id === priority.id;
+      const minRow = minRowLock.get(b.id);
+      // For priority, do NOT try to lift it—start at its current row.
+      const startAt = packUp
+        ? (isPriority ? b.rowStart : (minRow ?? 1))
+        : b.rowStart;
+
       const want = b.rowStart;
-      const y = topFreeRowFor(b, placed);
+      const y = topFreeRowFor(b, placed, startAt);
       if (y !== want){ b.rowStart = y; changed = true; }
       placed.push(b);
     }
+
     if (changed){
       qsa('.block').forEach(el=>{
         const bid = el.dataset.bid;
         const bb = blocks.find(x => x.id === bid);
         if (bb) placeCSS(el, bb);
       });
+      dirty();
     }
-    if (changed) dirty();
+  }
+
+  // ---- Auto-snap scheduler ----
+  let snapTimer = null;
+  function scheduleAutoSnap() {
+    clearTimeout(snapTimer);
+    // small debounce so rapid changes coalesce
+    snapTimer = setTimeout(() => reflow(null, true), 60);
+  }
+
+  // Run once on load (pack any existing gaps)
+  scheduleAutoSnap();
+
+  // Re-pack when window layout changes
+  window.addEventListener('resize', () => {
+    measureUnits();
+    scheduleAutoSnap();
+  });
+
+  // Re-pack when blocks are added/removed (DOM structure changes)
+  const mo = new MutationObserver(() => scheduleAutoSnap());
+  mo.observe(canvas, { childList: true, subtree: false });
+
+  // Save initial dash (ensures LS slot exists)
+  save(dash);
+
+  if (titleEl) {
+    titleEl.textContent = dash.title || 'Untitled';
+    if (titleEl.isContentEditable) {
+      titleEl.addEventListener('input', () => {
+        dash.title = (titleEl.textContent || '').trim() || 'Untitled';
+        setSaved(false);
+        debouncedSave();
+      });
+    }
   }
 
   // ---------- Lock ----------
@@ -184,7 +219,7 @@
   }
 
   // ---------- Drag with preview ----------
-  let drag = null; // { el, block, startC, startR, startX, startY, committed }
+  let drag = null; // { el, block, startC, startR, startX, startY, moved }
   let cancelOp = false;
 
   function onDragStart(e, el, block){
@@ -196,7 +231,12 @@
 
     e.preventDefault();
     cancelOp = false;
-    drag = { el, block, startC:block.colStart, startR:block.rowStart, startX:e.clientX, startY:e.clientY, committed:false };
+    drag = {
+      el, block,
+      startC:block.colStart, startR:block.rowStart,
+      startX:e.clientX, startY:e.clientY,
+      moved:false
+    };
     document.addEventListener('pointermove', onDragMove);
     document.addEventListener('pointerup', onDragEnd, { once:true });
     document.addEventListener('keydown', onOpKey, { once:true });
@@ -208,6 +248,7 @@
     if (!drag) return;
     const dCols = rnd((e.clientX - drag.startX) / (unitW || 1));
     const dRows = rnd((e.clientY - drag.startY) / (unitH || 1));
+    if (!drag.moved && (dCols !== 0 || dRows !== 0)) drag.moved = true;
 
     const nc = clamp(drag.startC + dCols, 1, GRID_COLS - drag.block.colSpan + 1);
     const nr = Math.max(1, drag.startR + dRows);
@@ -222,26 +263,26 @@
     if (!drag) return;
     if (cancelOp){ drag=null; return; } // Esc pressed => revert
 
-    // Read ghost (final preview) by parsing its grid; or recompute from last delta
-    // Safer to recompute from last pointer delta stored on ghost via dataset? We'll just compute from its style.
-    // However style values are strings; we can store in drag during move:
+    // If no movement occurred, do nothing (prevents click from triggering pack)
+    if (!drag.moved) { drag=null; return; }
+
+    // Commit block move based on ghost's final pos
     const styles = ghostEl && ghostEl.style.display !== 'none' ? ghostEl.style : null;
     let nc = drag.block.colStart, nr = drag.block.rowStart;
     if (styles) {
-      // grid-column: "<c> / span <w>"; grid-row: "<r> / span <h>"
       const gc = styles.gridColumn.split('/');
       const gr = styles.gridRow.split('/');
       if (gc.length >= 1) nc = parseInt(gc[0].trim(),10) || nc;
       if (gr.length >= 1) nr = parseInt(gr[0].trim(),10) || nr;
     }
 
-    // Commit block move
     drag.block.colStart = nc;
     drag.block.rowStart = nr;
     placeCSS(drag.el, drag.block);
 
-    // Now push others (single reflow)
-    reflow(drag.block);
+    // Now pack others up (single reflow) but don't lift this priority block
+    reflow(drag.block, true);
+
     dirty();
     drag=null;
   }
@@ -311,8 +352,9 @@
     Object.assign(rez.block, { colStart:c, rowStart:r, colSpan:w, rowSpan:h });
     placeCSS(rez.el, rez.block);
 
-    // Single reflow after commit
-    reflow(rez.block);
+    // Single reflow after commit (pack up) but keep this block's current row
+    reflow(rez.block, true);
+
     dirty();
     rez=null;
   }
@@ -376,7 +418,7 @@
       content.appendChild(inner);
     }
 
-    // Resize handles (minimal inline so always visible)
+    // Resize handles
     const addHandle = (cls, edge, styleObj) => {
       const h = document.createElement('div');
       h.className = `handle ${cls}`;
@@ -401,7 +443,7 @@
     addHandle('h-bl','bl', { left:'-6px', bottom:'-6px', cursor:'sw-resize' });
     addHandle('h-tl','tl', { left:'-6px', top:'-6px', cursor:'nw-resize' });
 
-    // Delete button (top-right)
+    // Delete button
     const close = document.createElement('button');
     close.className = 'close';
     close.type = 'button';
@@ -423,7 +465,7 @@
       const i = dash.blocks.findIndex(b => b.id === block.id);
       if (i >= 0) dash.blocks.splice(i, 1);
       el.remove();
-      reflow(null);
+      reflow(null, true);   // pack after delete
       dirty();
     });
 
@@ -443,24 +485,39 @@
     measureUnits();
     dash.blocks = (dash.blocks || []).map(normalize);
     dash.blocks.forEach(b => canvas.appendChild(makeBlockEl(b)));
-    // initial cleanup just in case
-    reflow(null);
+    // initial cleanup just in case (pack up)
+    reflow(null, true);
     setLocked(isLocked);
   }
 
-  // ---------- Add blocks ----------
-  function addTextBlock({ c=1, r=1, w=3, h=3, html='' } = {}){
+  // ---------- Add blocks (ALWAYS at bottom) ----------
+  function nextBottomRow() {
+    if (!dash.blocks || !dash.blocks.length) return 1;
+    return dash.blocks.reduce((m, b) => Math.max(m, bottom(b)), 0) + 1;
+  }
+
+  function addTextBlock({ c=1, w=3, h=3, html='' } = {}){
+    const r = nextBottomRow();
     const b = normalize({ id: uid(), type:'text', colStart:c, rowStart:r, colSpan:w, rowSpan:h, html });
     dash.blocks.push(b);
-    canvas.appendChild(makeBlockEl(b));
-    reflow(b);
+    const el = makeBlockEl(b);
+    canvas.appendChild(el);
+    // lock min row briefly so autosnap won't hoist it up immediately
+    minRowLock.set(b.id, r);
+    reflow(b, true);
+    setTimeout(() => minRowLock.delete(b.id), 250);
     dirty();
   }
-  function addImageBlock({ c=1, r=1, w=4, h=4, src='' } = {}){
+
+  function addImageBlock({ c=1, w=4, h=4, src='' } = {}){
+    const r = nextBottomRow();
     const b = normalize({ id: uid(), type:'image', colStart:c, rowStart:r, colSpan:w, rowSpan:h, src, objectFit:'contain' });
     dash.blocks.push(b);
-    canvas.appendChild(makeBlockEl(b));
-    reflow(b);
+    const el = makeBlockEl(b);
+    canvas.appendChild(el);
+    minRowLock.set(b.id, r);
+    reflow(b, true);
+    setTimeout(() => minRowLock.delete(b.id), 250);
     dirty();
   }
 
@@ -502,7 +559,6 @@
   }
 
   // ---------- Init ----------
-  window.addEventListener('resize', measureUnits);
   renderAll();
 
   // Expose helpers
