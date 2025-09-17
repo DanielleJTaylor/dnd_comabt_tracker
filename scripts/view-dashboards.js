@@ -243,69 +243,135 @@
   }
 
   // Monster/NPC template (portrait top-left, tight layout; no big gaps)
+  // Lightweight SVG placeholder shown in the real image block until you replace it
+  // Lightweight SVG placeholder for the real image block
+  const PORTRAIT_PLACEHOLDER =
+    "data:image/svg+xml;utf8," +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800">
+        <rect x="12" y="12" width="776" height="776" rx="16"
+              fill="#ffffff" stroke="#c9c9c9" stroke-width="3" stroke-dasharray="10 10"/>
+        <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle"
+              font-family="system-ui,Arial" font-size="28" fill="#777">Portrait / Token</text>
+      </svg>`
+    );
+
+  // Monster/NPC template (portrait top-left; compact, non-overlapping)
   function makeMonsterTemplateBlocks() {
     const css = `
     <style>
-      .ob2 .card{border:1px solid #cdb89a;border-radius:8px;background:#fff;padding:.6rem .8rem;line-height:1.35}
-      .ob2 .hdr{border:2px solid #7b5b30;border-radius:8px;background:#fff;padding:.55rem .9rem;margin:0 0 .25rem}
-      .ob2 .name{font-weight:800;font-size:1.25rem}
-      .ob2 .meta{opacity:.8}
-      .ob2 .sec{font-weight:800;border-bottom:2px solid #ccb391;margin:.25rem 0 .5rem;padding-bottom:.2rem}
-      .ob2 .row{display:flex;flex-wrap:wrap;gap:.5rem}
-      .ob2 .pill{padding:.2rem .45rem;border:1px solid #cdb89a;border-radius:6px;background:#fdf7eb;white-space:nowrap}
-      .ob2 table{width:100%;border-collapse:separate;border-spacing:.25rem}
-      .ob2 th,.ob2 td{border:1px solid #cdb89a;border-radius:6px;background:#fff;padding:.35rem .55rem;text-align:center}
-      .ob2 th{background:#f4ead6;font-weight:700}
-      .ob2 .portrait{border:2px dashed #b8a382;border-radius:8px;height:100%;display:grid;place-items:center;background:#fff;color:#7c6a50}
+      .obx .card{background:#fff;border:1px solid #e2e2e2;border-radius:10px;padding:.7rem .9rem;line-height:1.35;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+      .obx .name{font-weight:800;font-size:1.2rem}
+      .obx .meta{color:#666}
+      .obx .sec{font-weight:700;margin:0 0 .5rem;padding-bottom:.25rem;border-bottom:1px solid #eee}
+      .obx .big{font-size:2rem;font-weight:800;text-align:center}
+      .obx ul{margin:.25rem 0 0 1rem;padding:0}
+      .obx .list div{margin:.2rem 0}
+      .obx .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.25rem .75rem}
     </style>`;
 
     return [
-      block(0, 0, 4, 4, `<div class="ob2"><div class="portrait">Portrait / Token</div></div>`),
 
-      block(4, 0, 8, 2, `<div class="ob2">${css}
-        <div class="hdr">
-          <div class="name">Monster / NPC Name</div>
-          <div class="meta">Medium humanoid (any), any alignment</div>
-        </div>
-      </div>`),
+      { type: "text", x: 0, y: 0, w: 12, h: 1,html:
+        '<div class="name">Monster / NPC Name</div>' },
 
-      block(4, 2, 8, 2, `<div class="ob2 card"><div class="row">
-        <span class="pill"><b>AC</b> 13</span>
-        <span class="pill"><b>HP</b> 22 (5d8)</span>
-        <span class="pill"><b>Speed</b> 30 ft.</span>
-        <span class="pill"><b>PP</b> 12</span>
-      </div></div>`),
+      // Top-left image (real image block)
+      { type: "image", x: 0, y: 1, w: 5, h: 5, src: PORTRAIT_PLACEHOLDER, objectFit: "contain" },
 
-      block(0, 4, 6, 6, `<div class="ob2 card">
-        <div class="sec">Ability Scores</div>
-        <table>
-          <tr><th>STR</th><th>DEX</th><th>CON</th><th>INT</th><th>WIS</th><th>CHA</th></tr>
-          <tr><td>10</td><td>10</td><td>10</td><td>10</td><td>10</td><td>10</td></tr>
-        </table>
-      </div>`),
+      // Name / type
+      { type: "text", x: 5, y: 1, w: 7, h: 2, html:
+        `<div class="obx">
+          ${css}
+          <div class="card">
+            <div class="meta">Medium humanoid (any), any alignment</div>
+          </div>
+        </div>` },
 
-      block(6, 4, 6, 6, `<div class="ob2 card">
-        <div class="sec">Stat Summary</div>
-        <div><b>Saves</b> —</div>
-        <div><b>Skills</b> —</div>
-        <div><b>Resistances</b> —</div>
-        <div><b>Immunities</b> —</div>
-        <div><b>Senses</b> passive Perception 12</div>
-        <div><b>Languages</b> Common</div>
-        <div><b>Challenge</b> 1 (200 XP)</div>
-      </div>`),
+      // Stats (separate)
+      { type: "text", x: 5, y: 3, w: 7, h: 4, html:
+        `<div class="obx card">
+          <div class="sec">Stats</div>
+          <div class="list">
+            <div><b>Initiative:</b> +0</div>
+            <div><b>Proficiency:</b> +2</div>
+            <div><b>Speed:</b> 30 ft.</div>
+            <div><b>XP:</b> (milestone)</div>
+            <div><b>Passive Perception:</b> 10</div>
+            <div><b>Passive Insight:</b> 10</div>
+            <div><b>Passive Investigation:</b> 10</div>
+          </div>
+        </div>` },
 
-      block(0, 10, 12, 5, `<div class="ob2 card">
-        <div class="sec">Actions</div>
-        <div><b>Shortsword.</b> Melee Weapon Attack: +4 to hit …</div>
-        <div><b>Shortbow.</b> Ranged Weapon Attack: +4 to hit …</div>
-      </div>`),
+      {  type: "text", x: 0, y: 6, w: 5, h: 1, html:
+        '<div class="name">Inspiration</div>' },
 
-      block(0, 15, 12, 3, `<div class="ob2 card"><div class="sec">Bonus Actions</div>—</div>`),
-      block(0, 18, 12, 3, `<div class="ob2 card"><div class="sec">Reactions</div>—</div>`),
-      block(0, 21, 12, 3, `<div class="ob2 card"><div class="sec">Legendary Actions</div>—</div>`),
+              // HP — half height (h=3)
+      { type: "text", x: 0, y: 7, w: 4, h: 2, html:
+        `<div class="obx card">
+          <div class="sec">HP</div>
+          <div class="list">
+            <div><b>Max:</b> 100</div>
+            <div><b>Current:</b> 100</div>
+            <div><b>Temp:</b> 0</div>
+          </div>
+        </div>` },
+
+
+      // AC (separate)
+      { type: "text", x: 4, y: 7, w: 3, h: 2, html:
+        `<div class="obx card"><div class="sec">AC</div><div class="big">14</div></div>` },
+
+      // Saving Throws (separate)
+      { type: "text", x: 8, y: 7, w: 4, h: 6, html:
+        `<div class="obx card">
+          <div class="sec">Saving Throws</div>
+          <ul>
+            <li>STR +0</li><li>DEX +0</li><li>CON +0</li>
+            <li>INT +0</li><li>WIS +0</li><li>CHA +0</li>
+          </ul>
+        </div>` },
+
+
+      // Ability Scores — half height (h=3)
+      { type: "text", x: 7, y: 7, w: 3, h: 3, html:
+        `<div class="obx card">
+          <div class="sec">Ability Scores</div>
+          <div class="list">
+            <div>10 <b>STR</b></div><div>10 <b>DEX</b></div><div>10 <b>CON</b></div>
+            <div>10 <b>INT</b></div><div>10 <b>WIS</b></div><div>10 <b>CHA</b></div>
+          </div>
+        </div>` },
+
+
+
+      // Skills — double height (h=8)
+      { type: "text", x: 4, y: 14, w: 8, h: 7, html:
+        `<div class="obx card">
+          <div class="sec">Skills</div>
+          <div class="list">
+            <div>Acrobatics +0</div><div>Animal Handling +0</div>
+            <div>Arcana +0</div><div>Athletics +0</div>
+            <div>Deception +0</div><div>History +0</div>
+            <div>Insight +0</div><div>Intimidation +0</div>
+            <div>Investigation +0</div><div>Medicine +0</div>
+            <div>Nature +0</div><div>Perception +0</div>
+            <div>Performance +0</div><div>Persuasion +0</div>
+            <div>Religion +0</div><div>Sleight of Hand +0</div>
+            <div>Stealth +0</div><div>Survival +0</div>
+          </div>
+        </div>` },
+
+      // Everything below shifted to start after skills (no overlap)
+      { type: "text", x: 0, y: 22, w: 12, h: 3, html:
+        `<div class="obx card"><div class="sec">Bonus Actions</div>—</div>` },
+      { type: "text", x: 0, y: 25, w: 12, h: 3, html:
+        `<div class="obx card"><div class="sec">Reactions</div>—</div>` },
+      { type: "text", x: 0, y: 28, w: 12, h: 3, html:
+        `<div class="obx card"><div class="sec">Legendary Actions</div>—</div>` },
     ];
   }
+
+
 
   // ---------- create / save ----------
   function addDashboardRef(parentFolderId, dashId, title) {
