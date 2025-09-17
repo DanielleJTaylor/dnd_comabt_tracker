@@ -1,11 +1,13 @@
 /* scripts/dashboard-sheet.js
-   Grid editor with ghost preview + delayed reflow.
-
-   - Drag/resize shows a dashed "ghost" preview
-   - Other blocks DO NOT move until you release
-   - Release commits and triggers reflow (no overlaps, no vertical gaps)
-   - Press Esc during drag/resize to cancel
-   - Lock hides chrome and disables drag/resize/delete
+   Grid editor (row-first behavior)
+   - Long-press to drag (prevents accidental drags)
+   - Bottom/right-only resize
+   - Commit rules:
+       • Push-down cascade only for blocks whose COLUMNS overlap the moved/resized block
+       • Never push left/right
+   - Gravity-up tidy:
+       • After any change, blocks climb straight up if there’s room (no horizontal moves)
+       • Eliminates completely empty rows
 */
 
 (() => {
@@ -85,35 +87,21 @@
     el.style.gridRow    = `${b.rowStart} / span ${b.rowSpan}`;
   }
 
-  // ---------- Collision helpers ----------
-  const right   = (b) => b.colStart + b.colSpan;
-  const bottom  = (b) => b.rowStart + b.rowSpan;
-  const cOverlap= (a,b) => (a.colStart < right(b)) && (b.colStart < right(a));
-  const rOverlap= (a,b) => (a.rowStart < bottom(b)) && (b.rowStart < bottom(a));
-  const overlaps= (a,b) => cOverlap(a,b) && rOverlap(a,b);
+  // ---------- Geometry helpers ----------
+  const right    = (b) => b.colStart + b.colSpan;
+  const bottom   = (b) => b.rowStart + b.rowSpan;
+  const cOverlap = (a,b) => (a.colStart < right(b)) && (b.colStart < right(a));
+  const rOverlap = (a,b) => (a.rowStart < bottom(b)) && (b.rowStart < bottom(a));
+  const overlaps = (a,b) => cOverlap(a,b) && rOverlap(a,b);
 
   // ---------- "Add-at-bottom" lock ----------
-  // Newly added blocks get a temporary min-row "lock" so initial autosnap won't pull them upward.
-  const minRowLock = new Map(); // id -> minRow
+  const minRowLock = new Map(); // id -> minRow to keep just-added blocks from snapping up immediately
 
-  // ---------- Pack-up helpers ----------
-  // First free top row for 'b' against 'placed', starting from startAt (default 1)
-  function topFreeRowFor(b, placed, startAt = 1){
-    let y = Math.max(1, startAt);
-    while (true) {
-      const hit = placed.find(p =>
-        (b.colStart < (p.colStart + p.colSpan)) && (p.colStart < (b.colStart + b.colSpan)) &&
-        (y < (p.rowStart + p.rowSpan)) && (p.rowStart < y + b.rowSpan)
-      );
-      if (!hit) return y;
-      y = (hit.rowStart + hit.rowSpan);
-    }
-  }
-
-  // Pack blocks upward so none overlap AND no vertical gaps remain
-  function reflow(priority, packUp = true) {
-    const blocks = dash.blocks;
-    const ordered = blocks.slice().sort((a,b)=>{
+  // ---------- Gravity-up (no empty rows; no horizontal movement) ----------
+  function gravityUp(priority=null){
+    // Place blocks in reading order; each climbs as far up as possible without overlapping placed ones
+    const blocks = dash.blocks.slice().sort((a,b)=>{
+      // let the priority block remain where user committed it (we'll try to keep its row stable)
       if (priority){
         if (a.id === priority.id) return -1;
         if (b.id === priority.id) return  1;
@@ -123,39 +111,72 @@
     });
 
     const placed=[]; let changed=false;
-    for (const b of ordered) {
-      const isPriority = !!priority && b.id === priority.id;
-      const minRow = minRowLock.get(b.id);
-      // For priority, do NOT try to lift it—start at its current row.
-      const startAt = packUp
-        ? (isPriority ? b.rowStart : (minRow ?? 1))
-        : b.rowStart;
-
-      const want = b.rowStart;
-      const y = topFreeRowFor(b, placed, startAt);
-      if (y !== want){ b.rowStart = y; changed = true; }
-      placed.push(b);
+    for (const b of blocks){
+      const isPriority = priority && b.id === priority.id;
+      let y = b.rowStart;
+      const minY = isPriority ? b.rowStart : (minRowLock.get(b.id) ?? 1);
+      // climb upward while no overlap with already placed blocks
+      climb: for (let tryY = y - 1; tryY >= minY; tryY--){
+        const probe = { ...b, rowStart: tryY };
+        if (placed.some(p => overlaps(probe, p))) break climb; // blocked; stop climbing
+        y = tryY;
+      }
+      if (y !== b.rowStart){ b.rowStart = y; changed = true; }
+      placed.push({ ...b });
     }
-
-    if (changed){
-      qsa('.block').forEach(el=>{
-        const bid = el.dataset.bid;
-        const bb = blocks.find(x => x.id === bid);
-        if (bb) placeCSS(el, bb);
-      });
-      dirty();
-    }
+    if (changed) syncDOM();
   }
 
-  // ---- Auto-snap scheduler ----
+  // ---------- Push-down cascade limited to column-overlap ----------
+  function pushDownCascade(anchor){
+    // Anchor is already at its committed position.
+    // For every other block (top->bottom), if it would overlap any placed block AND has column overlap,
+    // move it directly below the lowest overlapping placed block. Repeat as needed (cascade).
+    const placed = [{ ...anchor }];
+    const others = dash.blocks
+      .filter(b => b.id !== anchor.id)
+      .slice()
+      .sort((a,b)=> (a.rowStart - b.rowStart) || (a.colStart - b.colStart));
+
+    let changed = false;
+    for (const b of others){
+      let newStart = b.rowStart;
+      while (true){
+        // find all placed blocks that overlap rows with b AND share columns
+        const colliders = placed.filter(p => cOverlap(b,p) && rOverlap(b,p));
+        if (!colliders.length) break;
+        // push b just below the lowest collider
+        const minBelow = Math.max(...colliders.map(p => p.rowStart + p.rowSpan));
+        if (minBelow <= newStart) { newStart = newStart + 1; } // safety in pathological cases
+        else newStart = minBelow;
+
+        // update b to proposed new pos and re-check
+        b.rowStart = newStart;
+        changed = true;
+      }
+      placed.push({ ...b });
+    }
+    if (changed) syncDOM();
+  }
+
+  // ---------- Sync DOM after layout changes ----------
+  function syncDOM(){
+    qsa('.block').forEach(el=>{
+      const bid = el.dataset.bid;
+      const bb = dash.blocks.find(x => x.id === bid);
+      if (bb) placeCSS(el, bb);
+    });
+    dirty();
+  }
+
+  // ---- Auto-snap scheduler (background tidy with gravity-up) ----
   let snapTimer = null;
   function scheduleAutoSnap() {
     clearTimeout(snapTimer);
-    // small debounce so rapid changes coalesce
-    snapTimer = setTimeout(() => reflow(null, true), 60);
+    snapTimer = setTimeout(() => gravityUp(null), 60);
   }
 
-  // Run once on load (pack any existing gaps)
+  // Run once on load
   scheduleAutoSnap();
 
   // Re-pack when window layout changes
@@ -218,16 +239,59 @@
     if (ghostEl) ghostEl.style.display = 'none';
   }
 
+  // ---------- Long-press to drag ----------
+  const PRESS_MS = 180;
+  let press = null; // {el, block, startX, startY, moved, timer, cancelled}
+
+  function setupLongPressDrag(el, block){
+    el.addEventListener('pointerdown', (e) => {
+      if (isLocked) return;
+      const path = e.composedPath ? e.composedPath() : (e.path || []);
+      if (path.some(n => n && (n.classList?.contains('handle') || n.classList?.contains('close') || n.isContentEditable))) return;
+
+      press = {
+        el, block,
+        startX: e.clientX,
+        startY: e.clientY,
+        moved: false,
+        cancelled: false,
+        timer: null
+      };
+
+      const cancel = () => {
+        if (!press) return;
+        press.cancelled = true;
+        clearTimeout(press.timer);
+        press = null;
+        window.removeEventListener('pointermove', onPressMove);
+        window.removeEventListener('pointerup', onPressUp);
+      };
+
+      const startDragFromPress = () => {
+        if (!press || press.cancelled) return;
+        onDragStart(e, el, block);
+      };
+
+      press.timer = setTimeout(startDragFromPress, PRESS_MS);
+      window.addEventListener('pointermove', onPressMove);
+      window.addEventListener('pointerup', onPressUp);
+
+      function onPressMove(ev){
+        if (!press) return;
+        const dx = Math.abs(ev.clientX - press.startX);
+        const dy = Math.abs(ev.clientY - press.startY);
+        if (dx > 3 || dy > 3) { press.moved = true; cancel(); }
+      }
+      function onPressUp(){ cancel(); }
+    });
+  }
+
   // ---------- Drag with preview ----------
   let drag = null; // { el, block, startC, startR, startX, startY, moved }
   let cancelOp = false;
 
   function onDragStart(e, el, block){
     if (isLocked) return;
-    if (e.button !== 0) return;
-
-    const path = e.composedPath ? e.composedPath() : (e.path || []);
-    if (path.some(n => n && n.isContentEditable)) return;
 
     e.preventDefault();
     cancelOp = false;
@@ -241,7 +305,6 @@
     document.addEventListener('pointerup', onDragEnd, { once:true });
     document.addEventListener('keydown', onOpKey, { once:true });
 
-    // show ghost at starting place; don't move the real block yet
     showGhost(block.colStart, block.rowStart, block.colSpan, block.rowSpan);
   }
   function onDragMove(e){
@@ -253,7 +316,6 @@
     const nc = clamp(drag.startC + dCols, 1, GRID_COLS - drag.block.colSpan + 1);
     const nr = Math.max(1, drag.startR + dRows);
 
-    // Move ONLY the ghost
     showGhost(nc, nr, drag.block.colSpan, drag.block.rowSpan);
   }
   function onDragEnd(){
@@ -261,12 +323,10 @@
     hideGhost();
 
     if (!drag) return;
-    if (cancelOp){ drag=null; return; } // Esc pressed => revert
-
-    // If no movement occurred, do nothing (prevents click from triggering pack)
+    if (cancelOp){ drag=null; return; }
     if (!drag.moved) { drag=null; return; }
 
-    // Commit block move based on ghost's final pos
+    // commit to ghost
     const styles = ghostEl && ghostEl.style.display !== 'none' ? ghostEl.style : null;
     let nc = drag.block.colStart, nr = drag.block.rowStart;
     if (styles) {
@@ -280,14 +340,16 @@
     drag.block.rowStart = nr;
     placeCSS(drag.el, drag.block);
 
-    // Now pack others up (single reflow) but don't lift this priority block
-    reflow(drag.block, true);
+    // Phase 1: push-down only those with column overlap
+    pushDownCascade(drag.block);
+    // Phase 2: gravity-up (remove empty rows)
+    gravityUp(drag.block);
 
     dirty();
     drag=null;
   }
 
-  // ---------- Resize with preview ----------
+  // ---------- Resize with preview (bottom/right only) ----------
   let rez = null; // { el, block, edge, startX, startY, startC, startR, startW, startH }
 
   function onResizeStart(e, el, block, edge){
@@ -305,7 +367,6 @@
     document.addEventListener('pointerup', onResizeEnd, { once:true });
     document.addEventListener('keydown', onOpKey, { once:true });
 
-    // Show ghost of starting rect
     showGhost(block.colStart, block.rowStart, block.colSpan, block.rowSpan);
   }
   function onResizeMove(e){
@@ -318,21 +379,9 @@
     let c = rez.block.colStart, r = rez.block.rowStart;
     let w = rez.block.colSpan,  h = rez.block.rowSpan;
 
-    if (rez.edge.includes('r')) w = clamp(rez.startW + dCols, 1, GRID_COLS - rez.startC + 1);
-    if (rez.edge.includes('b')) h = Math.max(1, rez.startH + dRows);
+    if (rez.edge.includes('r') || rez.edge.includes('br')) w = clamp(rez.startW + dCols, 1, GRID_COLS - rez.startC + 1);
+    if (rez.edge.includes('b') || rez.edge.includes('br')) h = Math.max(1, rez.startH + dRows);
 
-    if (rez.edge.includes('l')) {
-      const newC = clamp(rez.startC + dCols, 1, rez.startC + rez.startW - 1);
-      w = rez.startW + (rez.startC - newC);
-      c = newC;
-    }
-    if (rez.edge.includes('t')) {
-      const newR = Math.max(1, rez.startR + dRows);
-      h = rez.startH + (rez.startR - newR);
-      r = newR;
-    }
-
-    // Update ONLY ghost
     showGhost(c, r, w, h);
   }
   function onResizeEnd(){
@@ -340,9 +389,9 @@
     hideGhost();
 
     if (!rez) return;
-    if (cancelOp){ rez=null; return; } // Esc => revert
+    if (cancelOp){ rez=null; return; }
 
-    // Commit to ghost's final rect
+    // commit to ghost
     const gc = ghostEl && ghostEl.style.gridColumn.split('/');
     const gr = ghostEl && ghostEl.style.gridRow.split('/');
     let c = rez.block.colStart, r = rez.block.rowStart, w = rez.block.colSpan, h = rez.block.rowSpan;
@@ -352,8 +401,10 @@
     Object.assign(rez.block, { colStart:c, rowStart:r, colSpan:w, rowSpan:h });
     placeCSS(rez.el, rez.block);
 
-    // Single reflow after commit (pack up) but keep this block's current row
-    reflow(rez.block, true);
+    // Phase 1: push-down only for column-overlap colliders
+    pushDownCascade(rez.block);
+    // Phase 2: gravity-up
+    gravityUp(rez.block);
 
     dirty();
     rez=null;
@@ -362,8 +413,6 @@
   // Cancel current op with Esc
   function onOpKey(e){
     if (e.key !== 'Escape') return;
-    cancelOp = true;
-    // Cleanup listeners + ghost; leave blocks unchanged
     hideGhost();
     if (drag) {
       document.removeEventListener('pointermove', onDragMove);
@@ -418,7 +467,7 @@
       content.appendChild(inner);
     }
 
-    // Resize handles
+    // Resize handles: right, bottom, bottom-right
     const addHandle = (cls, edge, styleObj) => {
       const h = document.createElement('div');
       h.className = `handle ${cls}`;
@@ -434,14 +483,9 @@
       h.addEventListener('pointerdown', (e) => onResizeStart(e, el, block, edge));
       el.appendChild(h);
     };
-    addHandle('h-t', 't',  { top: '-6px', left: '50%', transform: 'translateX(-50%)', cursor:'ns-resize' });
-    addHandle('h-r', 'r',  { right:'-6px', top:'50%', transform:'translateY(-50%)', cursor:'ew-resize' });
-    addHandle('h-b', 'b',  { bottom:'-6px', left:'50%', transform:'translateX(-50%)', cursor:'ns-resize' });
-    addHandle('h-l', 'l',  { left:'-6px', top:'50%', transform:'translateY(-50%)', cursor:'ew-resize' });
-    addHandle('h-tr','tr', { right:'-6px', top:'-6px', cursor:'ne-resize' });
-    addHandle('h-br','br', { right:'-6px', bottom:'-6px', cursor:'se-resize' });
-    addHandle('h-bl','bl', { left:'-6px', bottom:'-6px', cursor:'sw-resize' });
-    addHandle('h-tl','tl', { left:'-6px', top:'-6px', cursor:'nw-resize' });
+    addHandle('h-r',  'r',  { right:'-6px', top:'50%', transform:'translateY(-50%)', cursor:'ew-resize' });
+    addHandle('h-b',  'b',  { bottom:'-6px', left:'50%', transform:'translateX(-50%)', cursor:'ns-resize' });
+    addHandle('h-br', 'br', { right:'-6px', bottom:'-6px', cursor:'se-resize' });
 
     // Delete button
     const close = document.createElement('button');
@@ -465,14 +509,15 @@
       const i = dash.blocks.findIndex(b => b.id === block.id);
       if (i >= 0) dash.blocks.splice(i, 1);
       el.remove();
-      reflow(null, true);   // pack after delete
+      gravityUp(null);
       dirty();
     });
 
     el.appendChild(content);
     el.appendChild(close);
 
-    el.addEventListener('pointerdown', (e) => onDragStart(e, el, block));
+    // long-press to drag
+    setupLongPressDrag(el, block);
 
     if (isLocked) {
       qsa('.handle, .close', el).forEach(h => h.style.display = 'none');
@@ -485,8 +530,7 @@
     measureUnits();
     dash.blocks = (dash.blocks || []).map(normalize);
     dash.blocks.forEach(b => canvas.appendChild(makeBlockEl(b)));
-    // initial cleanup just in case (pack up)
-    reflow(null, true);
+    gravityUp(null); // initial tidy
     setLocked(isLocked);
   }
 
@@ -495,20 +539,17 @@
     if (!dash.blocks || !dash.blocks.length) return 1;
     return dash.blocks.reduce((m, b) => Math.max(m, bottom(b)), 0) + 1;
   }
-
   function addTextBlock({ c=1, w=3, h=3, html='' } = {}){
     const r = nextBottomRow();
     const b = normalize({ id: uid(), type:'text', colStart:c, rowStart:r, colSpan:w, rowSpan:h, html });
     dash.blocks.push(b);
     const el = makeBlockEl(b);
     canvas.appendChild(el);
-    // lock min row briefly so autosnap won't hoist it up immediately
     minRowLock.set(b.id, r);
-    reflow(b, true);
+    gravityUp(null);
     setTimeout(() => minRowLock.delete(b.id), 250);
     dirty();
   }
-
   function addImageBlock({ c=1, w=4, h=4, src='' } = {}){
     const r = nextBottomRow();
     const b = normalize({ id: uid(), type:'image', colStart:c, rowStart:r, colSpan:w, rowSpan:h, src, objectFit:'contain' });
@@ -516,7 +557,7 @@
     const el = makeBlockEl(b);
     canvas.appendChild(el);
     minRowLock.set(b.id, r);
-    reflow(b, true);
+    gravityUp(null);
     setTimeout(() => minRowLock.delete(b.id), 250);
     dirty();
   }
@@ -533,7 +574,9 @@
       else exec(cmd, val);
     });
     const formatSel = toolbar.querySelector('select[data-command="formatBlock"]');
-    if (formatSel) formatSel.addEventListener('change', () => document.execCommand('formatBlock', false, formatSel.value || 'P'));
+    if (formatSel) formatSel.addEventListener('change', () =>
+      document.execCommand('formatBlock', false, formatSel.value || 'P')
+    );
   }
 
   // ---------- Buttons ----------
@@ -565,6 +608,8 @@
   window.__sheet = {
     get data(){ return dash; },
     set data(v){ dash = v; renderAll(); dirty(); },
-    addTextBlock, addImageBlock, renderAll, setLocked, reflow
+    addTextBlock, addImageBlock, renderAll,
+    setLocked,
+    gravityUp, pushDownCascade
   };
 })();
