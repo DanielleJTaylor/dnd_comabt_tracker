@@ -121,8 +121,6 @@ body {
     text-align: right;
 }
 
-
-
 .dash-breadcrumbs {
   display: flex;
   flex-wrap: wrap;
@@ -150,9 +148,6 @@ body {
 .folder-card .card-header { padding: 1rem; font-weight: bold; border-bottom: 1px solid #eee; }
 .folder-card .card-body   { padding: 1rem; color: #555; }
 
-
-
-
 /* Drag affordances */
 .dashboard-card, .folder-card { cursor: grab; }
 .dashboard-card:active, .folder-card:active { cursor: grabbing; }
@@ -162,7 +157,6 @@ body {
 
 .dash-breadcrumbs a.drop-ok { box-shadow: 0 0 0 2px #7fb069 inset; border-radius: 4px; }
 .dash-breadcrumbs a.drop-bad { box-shadow: 0 0 0 2px #c0392b inset; border-radius: 4px; }
-
 
 #dashboard-header .header-left,
 .sheet-header .header-left {
@@ -174,4 +168,42 @@ body {
 #dash-back.btn {
   padding: 6px 10px;
   text-decoration: none;
+}
+
+/* Card Actions (for delete button) */
+/* --- Compact delete icon (top-right corner) --- */
+.card-actions {
+  top: 4px;
+  right: 4px;
+  gap: 2px;
+}
+
+/* smaller, subtler button */
+.icon-btn {
+  width: 22px;
+  height: 22px;
+  font-size: 13px;          /* smaller glyph/emoji/SVG */
+  border-radius: 6px;        /* less bubble, more chip */
+  background: transparent;   /* no fill until hover */
+  box-shadow: none;
+  opacity: .9;
+}
+
+.icon-btn:hover {
+  background: rgba(0,0,0,.06);
+}
+
+.icon-btn.danger {
+  color: #c0392b;            /* subtle red */
+}
+
+.icon-btn.danger:hover {
+  background: #c0392b;       /* solid on hover */
+  color: #fff;
+}
+
+/* optional: extra-compact on narrow screens */
+@media (max-width: 700px) {
+  .icon-btn { width: 20px; height: 20px; font-size: 12px; }
+  .card-actions { top: 3px; right: 3px; }
 }

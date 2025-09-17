@@ -8,25 +8,23 @@
   // Only set src once (lazy-load when opened)
   function ensureDashSrc() {
     if (!iframe.dataset.loaded) {
-      iframe.src = 'dashboards/index.html';   // <-- your dashboards UI
+      iframe.src = 'view-dashboards.html';   // <-- CORRECTED: Point to the main dashboards view
       iframe.dataset.loaded = '1';
     }
   }
 
   function openDashboards() {
     ensureDashSrc();
-    panel?.classList.add('open');
+    document.getElementById('app-container')?.classList.add('dashboard-visible');
     panel?.setAttribute('aria-hidden', 'false');
   }
 
   function closeDashboards() {
-    panel?.classList.remove('open');
+    document.getElementById('app-container')?.classList.remove('dashboard-visible');
     panel?.setAttribute('aria-hidden', 'true');
   }
 
   openBtn?.addEventListener('click', openDashboards);
   closeBtn?.addEventListener('click', closeDashboards);
 
-  // Optional: auto-load on first page load (uncomment if you want it preloaded)
-  // ensureDashSrc();
 })();

@@ -322,12 +322,37 @@ document.addEventListener('DOMContentLoaded', () => {
     saveTimer = setTimeout(saveNow, delay);
   }
 
+  // Accept {colStart/...} or {x,y,w,h} and provide sane defaults
+  function normalizeRect(b, index = 0) {
+    const ns = n => Number.isFinite(n) ? n : null;
+
+    let colStart = ns(b.colStart);
+    let rowStart = ns(b.rowStart);
+    let colSpan  = ns(b.colSpan);
+    let rowSpan  = ns(b.rowSpan);
+
+    // Fallback from x/y/w/h (x,y assumed 0-based -> grid is 1-based)
+    if (colStart == null && Number.isFinite(b.x)) colStart = b.x + 1;
+    if (rowStart == null && Number.isFinite(b.y)) rowStart = b.y + 1;
+    if (colSpan  == null && Number.isFinite(b.w)) colSpan  = b.w;
+    if (rowSpan  == null && Number.isFinite(b.h)) rowSpan  = b.h;
+
+    // Final defaults if still missing
+    if (colSpan == null)  colSpan  = 12;
+    if (rowSpan == null)  rowSpan  = 2;
+    if (colStart == null) colStart = 1;
+    if (rowStart == null) rowStart = 1 + index * (rowSpan + 1);
+
+    return { colStart, rowStart, colSpan, rowSpan };
+  }
+
+  
   function applySheetData(data) {
     const titleEl = document.getElementById('sheet-title');
     if (titleEl && data.title) titleEl.textContent = data.title;
 
     blocksContainer.innerHTML = '';
-    (data.blocks || []).forEach(b => {
+    (data.blocks || []).forEach((b, i) => {
       const el = document.createElement('div');
       el.className = 'block';
       el.innerHTML = `
@@ -337,41 +362,30 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="resize-handle bottom"></div>
         <div class="resize-handle bottom-right"></div>
       `;
-      writeRect(el, {
-        colStart: b.colStart, rowStart: b.rowStart,
-        colSpan: b.colSpan, rowSpan: b.rowSpan
-      });
+
+      // NEW: normalize before placing
+      const rect = normalizeRect(b, i);
+      writeRect(el, rect);
       blocksContainer.appendChild(el);
 
       if (b.type === 'image') {
         makeImageBlock(el, b.src || '');
         const wrap = el.querySelector('.img-wrap');
-        const img = wrap?.querySelector('img');
-        if (img && b.objectFit) img.style.objectFit = b.objectFit;
-        if (wrap && b.wrapSize?.w && b.wrapSize?.h) {
-          wrap.style.width = `${b.wrapSize.w}px`;
-          wrap.style.height = `${b.wrapSize.h}px`;
-        } else {
-          wrap.style.width = '100%';
-          wrap.style.height = '100%';
+        if (b.objectFit) wrap.querySelector('img').style.objectFit = b.objectFit;
+        if (b.wrapSize?.w && b.wrapSize?.h) {
+          wrap.style.width = b.wrapSize.w + '%';
+          wrap.style.height = b.wrapSize.h + '%';
         }
       } else {
         el.querySelector('.block-content').innerHTML = b.html || '';
       }
-
-      // Bind events (drag/resize are skipped in locked mode)
-      bindBlockEvents(el);
-
-      // In locked mode, hide delete/resize affordances entirely
-      if (isLocked) {
-        el.querySelector('.delete-btn')?.remove();
-        el.querySelectorAll('.resize-handle')?.forEach(h => h.remove());
-      }
     });
 
+    // after load, mark as saved
     lastSavedSnapshot = serializeSheet();
     markSaved();
   }
+
 
   function loadOrInit() {
     const raw = localStorage.getItem(DASH_ID);

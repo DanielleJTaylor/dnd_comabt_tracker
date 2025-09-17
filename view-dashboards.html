@@ -24,14 +24,16 @@
     <div class="dashboard-controls">
         <button id="newDashboardBtn">➕ New Dashboard</button>
         <button id="newCharBtn">➕ New: 5e Character</button>
-        <button id="newMonsterBtn">➕ New: 5e Monster/NPC</button>
+        <button id="newMonsterBtn" class="btn">➕ New: 5e Monster/NPC</button>
+
+
 
         <button id="sortBtn">⇅ Sort A-Z</button>
         <button id="newFolderBtn">📁 New Folder</button>
 
         <!-- Imports -->
-        <button id="importTextBtn">📋 Import Text</button>
-        <label class="btn">
+        <button id="importTextBtn" class="btn">📋 Import Text</button>
+        <label class="btn file">
         📄 Import PDF
         <input id="importPdfInput" type="file" accept="application/pdf" hidden>
         </label>
@@ -66,8 +68,10 @@
     }
     </script>
 
+    <script src="./scripts/templates.js"></script>
+
     <!-- Importer module is dynamically imported by view-dashboards.js -->
-    <script src="scripts/view-dashboards.js" defer></script>
+    <script type="module" src="scripts/view-dashboards.js" defer></script>
 
 </body>
 </html>

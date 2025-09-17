@@ -1,6 +1,6 @@
 // dashboards/core.js
-import { Templates, renderSheet } from './templates.js';
-import { importFromText, importFromPDF } from './statblock-import.js';
+import { Templates, renderSheet } from '../dashboards/templates.js';
+import { importFromText, importFromPDF } from '../dashboards/statblock-import.js';
 
 const $ = (s, r=document) => r.querySelector(s);
 const sheetCanvas = $('#sheetCanvas');

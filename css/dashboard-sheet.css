@@ -1,164 +1,243 @@
-:root{
-  --grid-columns: 12;
-  --grid-gap: 12px;
-  --row-size: 40px;
-  --parchment-bg:#f6e4c1;
-  --parchment-dark:#e8d7b3;
-  --parchment-border:#d0bfa2;
-  --btn:#7fb069; 
-  --btn-hover:#6ca05b;
-  --color-saving: #e67e22; /* Orange for saving */
-  --color-saved: #2ecc71;  /* Green for saved */
+/* ===========================
+   Dashboard Sheet — CSS
+   =========================== */
+
+/* Design width (used for full-page editing; the embed script scales it) */
+:root { --sheet-width: 700px; }
+
+/* Page backdrop */
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: #f6e4c1;            /* parchment */
+  color: #2b2b2b;
+  font-family: system-ui, Arial, sans-serif;
 }
 
-*{box-sizing:border-box}
-html,body{height:100%;margin:0}
-body{font-family:sans-serif;background:var(--parchment-bg);color:#333}
-body.no-select { user-select: none; -webkit-user-select: none; }
+.hidden { display: none !important; }
 
-#sheet-container{display:flex;flex-direction:column;min-height:100%}
-
-.sheet-header{
-  display:flex;align-items:center;justify-content:space-between;
-  gap:16px;padding:.75rem 1rem;background:var(--parchment-dark);
-  border-bottom:2px solid var(--parchment-border); flex-shrink: 0;
-}
-.header-left, .header-right { display: flex; align-items: center; gap: 12px; }
-.sheet-header h1{margin:0;font-size:clamp(1rem,2vw+0.5rem,1.6rem); outline: none;}
-.sheet-header h1:focus { box-shadow: 0 0 0 2px var(--btn); border-radius: 4px; padding: 0 4px; }
-
-.btn{
-  background:var(--btn);color:#fff;border:1px solid var(--btn-hover);
-  border-radius:6px;padding:.45rem .75rem;cursor:pointer;text-decoration:none;
-  white-space:nowrap;display:inline-flex;align-items:center;gap:.4rem;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
-}
-.btn:hover{background:var(--btn-hover)}
-
-/* Save Status Button Styling */
-.btn-status { pointer-events: none; } /* Not clickable */
-.btn-status.saving { background-color: var(--color-saving); border-color: var(--color-saving); }
-.btn-status.saved { background-color: var(--color-saved); border-color: var(--color-saved); }
-
-
-.format-toolbar{
-  background:var(--parchment-dark);border-bottom:2px solid var(--parchment-border);
-  padding:8px;display:flex;gap:6px;flex-wrap:wrap; flex-shrink: 0;
-}
-.format-toolbar button,.format-toolbar select{
-  background:#fff;border:1px solid var(--parchment-border);
-  border-radius:4px;padding:5px 10px;cursor:pointer
-}
-.format-toolbar button:hover{background:#eee}
-
-.grid-container{
-  flex:1 1 auto; position: relative; display:grid;
-  grid-template-columns:repeat(var(--grid-columns), 1fr);
-  grid-auto-rows: var(--row-size);
-  gap:var(--grid-gap); padding:var(--grid-gap); min-height: 0;
+/* Wraps the entire sheet page (header + canvas) */
+#sheet-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 12px 48px;
 }
 
-.block{
-  position:relative; display:flex; flex-direction:column;
-  background:#fff; border:1px solid var(--parchment-border);
-  border-radius:5px; box-shadow:0 2px 5px rgba(0,0,0,.05);
-  padding: 10px 10px 10px 12px;
-  width: auto !important; height: auto !important;
-  touch-action: none; transition: opacity 0.15s ease-in-out;
-}
+/* When the sheet page is embedded and auto-scaled,
+   JS creates #sheetFit and moves the canvas inside it.
+   No special CSS required here. */
 
-.block-ghost {
-    background: rgba(127, 176, 105, 0.2);
-    border: 2px dashed var(--btn); border-radius: 5px;
-    z-index: 5; pointer-events: none;
-    transition: all 0.05s linear;
+/* ---------- Header ---------- */
+.sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: 12px 10px;
+  background: #e8d7b3;            /* slightly darker parchment bar */
+  border: 2px solid #d0bfa2;
+  border-radius: 8px;
+  margin: 12px 0 8px;
 }
-
-.block.resizing-active,
-.block.dragging-active {
-    opacity: 0.3; pointer-events: none; z-index: 10;
-}
-
-.block-content{
-  flex: 1; min-height: 0; line-height: 1.4; overflow: auto;
-  outline: none; cursor: text;
-  -webkit-user-select: text; user-select: text;
-}
-.block.image-block .block-content { padding: 0; }
-.block-content > :first-child { margin-top: 0; }
-.block-content > :last-child  { margin-bottom: 0; }
-
-.block.editing{ outline: 2px solid var(--btn); border-color: var(--btn); }
-
-.delete-btn{
-  position:absolute; top:0; right:0; width:24px; height:24px;
-  display:grid; place-items:center; background:rgba(255,255,255,0.7); 
-  backdrop-filter: blur(2px); border:none; border-radius: 0 4px 0 8px;
-  font-size:1.2rem; line-height:1; color:#888; cursor:pointer; z-index:5;
-}
-.delete-btn:hover{ color:#fff; background: #d9534f; }
-
-.resize-handle.bottom-right {
-    position:absolute; bottom: 0; right: 0;
-    width: 20px; height: 20px;
-    cursor: nwse-resize; z-index: 4;
-    border-right: 3px solid rgba(0,0,0,0.2);
-    border-bottom: 3px solid rgba(0,0,0,0.2);
-    border-bottom-right-radius: 5px; opacity: 0.5;
-}
-.block:hover .resize-handle.bottom-right { opacity: 1; }
-
-#sheet-container.is-locked .resize-handle,
-#sheet-container.is-locked .delete-btn,
-#sheet-container.is-locked #add-block-btn,
-#sheet-container.is-locked #format-toolbar { display:none; }
-.is-locked .block, .is-locked .block-content { cursor: default; }
-
-#add-block-btn{
-  position:fixed;right:20px;bottom:20px;width:52px;height:52px;border-radius:50%;
-  font-size:26px;line-height:1; display:grid; place-items:center;
-  padding:0;box-shadow:0 4px 10px rgba(0,0,0,.15); z-index: 100;
-}
-
-/* Image block specifics */
-.block.image-block { padding: 6px; }
-.block .img-wrap {
-  position: relative; width: 100%; height: 100%;
-}
-.block .img-wrap img {
-  display: block; width: 100%; height: 100%;
-  object-fit: contain; pointer-events: none; user-select: none;
-}
-.block .img-wrap::after {
-  content: ""; position: absolute; inset: 0;
-  border: 1px dashed rgba(0,0,0,.2); border-radius: 4px;
-  pointer-events: none;
-}
-.block.image-block .img-actions {
-  position: absolute; top: 6px; right: 6px; z-index: 2;
-  display: flex; gap: 4px;
-}
-.block.image-block .img-actions button {
-  background: rgba(255,255,255,.85); border: 1px solid #bbb;
-  border-radius: 4px; font-size: 12px; padding: 2px 6px; cursor: pointer;
-}
-.block.image-block .img-actions button:hover { background: #fff; }
-.block .img-wrap.resizing-image { outline: 2px solid var(--btn); }
-
-/* Prevent text caret while dragging/resizing */
-.no-select, .no-select * {
-  user-select: none !important;
-  -webkit-user-select: none !important;
-}
-
-#dashboard-header .header-left,
-.sheet-header .header-left {
+.sheet-header .header-left,
+.sheet-header .header-right {
   display: flex;
   align-items: center;
   gap: .5rem;
 }
+.sheet-header h1 {
+  margin: 0;
+  font-size: clamp(1.125rem, 2.2vw, 1.6rem);
+  font-weight: 800;
+  letter-spacing: .2px;
+  line-height: 1.2;
+}
 
-#dash-back.btn {
+/* Buttons */
+.btn {
+  appearance: none;
+  border: 1px solid #6ca05b;
+  background: #7fb069;
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color .15s ease, transform .05s ease;
+}
+.btn:hover  { background: #6ca05b; }
+.btn:active { transform: translateY(1px); }
+.btn.btn-status { pointer-events: none; opacity: .9; }
+
+/* Lock toggle colors (JS toggles text, not classes, so these are optional) */
+#lock-toggle-btn.unlocked { background: #7fb069; }
+#lock-toggle-btn.locked   { background: #8a6d3b; border-color: #7a5f30; }
+
+/* ---------- Format toolbar ---------- */
+.format-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  align-items: center;
+  padding: 10px;
+  margin: 10px 0 14px;
+  background: #f6e4c1;
+  border: 2px solid #d0bfa2;
+  border-radius: 8px;
+}
+.format-toolbar button,
+.format-toolbar select {
+  border: 1px solid #cbb796;
+  background: #fff6e5;
+  color: #333;
+  border-radius: 6px;
   padding: 6px 10px;
-  text-decoration: none;
+  cursor: pointer;
+}
+.format-toolbar button:hover { background: #ffeecd; }
+
+/* ===========================
+   Fixed-width Canvas + Grid
+   =========================== */
+
+/* Fixed canvas width so blocks don't stretch as the right panel resizes.
+   JS auto-scales when embedded; full-page sticks to this design width. */
+.grid-container,
+#blocks-container, /* in case you use this id directly */
+.sheet,            /* support either selector */
+#sheetCanvas {
+  width: var(--sheet-width);
+  max-width: var(--sheet-width);
+  margin: 0 auto;             /* center the canvas in full-page view */
+  display: grid;
+  grid-template-columns: repeat(var(--grid-columns, 12), minmax(0, 1fr));
+  grid-auto-rows: var(--row-size, 64px);
+  gap: var(--grid-gap, 10px);
+  padding: var(--grid-margin, 16px);
+  background: #f2dfbb;        /* slightly different parchment inside */
+  border: 2px solid #d0bfa2;
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0,0,0,.08);
+}
+
+/* Individual blocks (grid item) */
+.block {
+  position: relative;
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.06);
+  padding: 12px 12px 36px;     /* room for footer/handles */
+  overflow: hidden;
+  outline: none;               /* remove contenteditable outline */
+  transition: box-shadow .12s ease, transform .04s ease;
+}
+.block:focus-within { box-shadow: 0 6px 18px rgba(0,0,0,.14); }
+
+/* Editable area */
+.block .block-content {
+  min-height: 1.25rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  caret-color: #222;
+}
+.block .block-content:empty:before {
+  content: attr(data-placeholder);
+  color: #888;
+}
+
+/* Resize handles */
+.resize-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: rgba(0,0,0,.12);
+  border: 1px solid rgba(0,0,0,.25);
+  z-index: 3;
+}
+.resize-handle:hover { background: rgba(0,0,0,.18); }
+.resize-handle.right        { top: 50%; right: -7px; transform: translateY(-50%); cursor: ew-resize; }
+.resize-handle.bottom       { left: 50%; bottom: -7px; transform: translateX(-50%); cursor: ns-resize; }
+/* FIX: your HTML uses 'bottom-right' but CSS previously had '.br' */
+.resize-handle.bottom-right { right: -7px; bottom: -7px; cursor: nwse-resize; }
+
+/* Delete button */
+.delete-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 4;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(255,255,255,.85);
+  box-shadow: 0 1px 6px rgba(0,0,0,.12);
+  cursor: pointer;
+}
+.delete-btn:hover { background: #ffebea; color: #b71c1c; }
+
+/* Dragging/Resizing feedback */
+.block.dragging { opacity: .85; transform: scale(.995); box-shadow: 0 12px 30px rgba(0,0,0,.18); }
+.block.resizing { user-select: none; box-shadow: 0 12px 30px rgba(0,0,0,.18); }
+
+/* Ghost block used during drag/resize previews */
+.block-ghost {
+  background: repeating-linear-gradient(45deg, #e8e8e8, #e8e8e8 8px, #f7f7f7 8px, #f7f7f7 16px);
+  border: 1px dashed #bbb;
+  border-radius: 10px;
+}
+
+/* Image helpers (when a block contains an image) */
+.img-wrap { position: relative; display: inline-block; max-width: 100%; width: 100%; height: 100%; }
+.img-wrap img { max-width: 100%; max-height: 100%; display: block; border-radius: 8px; object-fit: contain; }
+.img-actions { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; }
+.img-actions button {
+  border: 0;
+  background: rgba(255,255,255,.95);
+  border-radius: 999px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-weight: 700;
+  box-shadow: 0 1px 6px rgba(0,0,0,.12);
+}
+.img-actions button:hover { background: #fff; }
+
+/* Floating add-block button (only shown when unlocked) */
+#add-block-btn {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  font-size: 28px;
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+}
+
+/* ---------- Locked UI (JS toggles .is-locked on #sheet-container) ---------- */
+.is-locked .resize-handle,
+.is-locked .delete-btn {
+  display: none !important;
+}
+.is-locked .block .block-content[contenteditable="true"] {
+  /* leave text selectable but prevent accidental edits to text blocks if desired */
+  user-select: text;
+}
+
+/* ---------- Small screens ---------- */
+@media (max-width: 1024px) {
+  /* Keep the design width; the embed script will scale when in the right panel.
+     For full-page on phones, horizontal scroll is acceptable. */
+  .grid-container,
+  #blocks-container,
+  .sheet,
+  #sheetCanvas {
+    width: var(--sheet-width);
+    max-width: var(--sheet-width);
+    overflow: auto;
+  }
+  #sheet-container { padding-bottom: 72px; }
 }
