@@ -303,10 +303,20 @@
         </div>` },
 
       {  type: "text", x: 0, y: 6, w: 5, h: 1, html:
-        '<div class="name">Inspiration</div>' },
+        '<div class="name">Alive?</div>' },
 
-              // HP — half height (h=3)
-      { type: "text", x: 0, y: 7, w: 4, h: 2, html:
+
+
+      // AC (heading)
+      { type: "text", x: 6, y: 7, w: 3, h: 1, html:
+        `<div class="obx card"><div class="sec">AC</div>` },
+      // AC (text)
+      { type: "text", x: 6, y: 8, w: 3, h: 2, html:
+        `<div class="big">14</div></div>` },
+
+
+      // HP — half height (h=3)
+      { type: "text", x: 9, y: 7, w: 3, h: 3, html:
         `<div class="obx card">
           <div class="sec">HP</div>
           <div class="list">
@@ -317,23 +327,8 @@
         </div>` },
 
 
-      // AC (separate)
-      { type: "text", x: 4, y: 7, w: 3, h: 2, html:
-        `<div class="obx card"><div class="sec">AC</div><div class="big">14</div></div>` },
-
-      // Saving Throws (separate)
-      { type: "text", x: 8, y: 7, w: 4, h: 6, html:
-        `<div class="obx card">
-          <div class="sec">Saving Throws</div>
-          <ul>
-            <li>STR +0</li><li>DEX +0</li><li>CON +0</li>
-            <li>INT +0</li><li>WIS +0</li><li>CHA +0</li>
-          </ul>
-        </div>` },
-
-
       // Ability Scores — half height (h=3)
-      { type: "text", x: 7, y: 7, w: 3, h: 3, html:
+      { type: "text", x: 0, y: 7, w: 3, h: 3, html:
         `<div class="obx card">
           <div class="sec">Ability Scores</div>
           <div class="list">
@@ -343,9 +338,21 @@
         </div>` },
 
 
+      // Saving Throws (separate)
+      { type: "text", x: 3, y: 7, w: 3, h: 3, html:
+        `<div class="obx card">
+          <div class="sec">Saving Throws</div>
+          <ul>
+            <li>STR +0</li><li>DEX +0</li><li>CON +0</li>
+            <li>INT +0</li><li>WIS +0</li><li>CHA +0</li>
+          </ul>
+        </div>` },
+      
+
+
 
       // Skills — double height (h=8)
-      { type: "text", x: 4, y: 14, w: 8, h: 7, html:
+      { type: "text", x: 0, y: 10, w: 4, h: 8, html:
         `<div class="obx card">
           <div class="sec">Skills</div>
           <div class="list">
@@ -361,13 +368,18 @@
           </div>
         </div>` },
 
+      // Features (separate)
+      { type: "text", x: 4, y: 10, w: 8, h: 2, html:
+        `<div class="obx card">
+          <div class="sec">Features</div>
+          '<div class="name">Description</div>
+        </div>` },
+
       // Everything below shifted to start after skills (no overlap)
-      { type: "text", x: 0, y: 22, w: 12, h: 3, html:
-        `<div class="obx card"><div class="sec">Bonus Actions</div>—</div>` },
-      { type: "text", x: 0, y: 25, w: 12, h: 3, html:
+      { type: "text", x: 4, y: 12, w: 8, h: 5, html:
+        `<div class="obx card"><div class="sec"> Actions</div>—</div>` },
+      { type: "text", x: 4, y: 17, w: 8, h: 1, html:
         `<div class="obx card"><div class="sec">Reactions</div>—</div>` },
-      { type: "text", x: 0, y: 28, w: 12, h: 3, html:
-        `<div class="obx card"><div class="sec">Legendary Actions</div>—</div>` },
     ];
   }
 
