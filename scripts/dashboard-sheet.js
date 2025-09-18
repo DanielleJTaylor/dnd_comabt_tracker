@@ -638,43 +638,48 @@ document.addEventListener('DOMContentLoaded', () => {
     const content = el.querySelector('.block-content');
 
     if (!isLocked) {
+      // inside bindBlockEvents(el) ...
       interact(el)
         .draggable({
-          hold: 220,              // long-press to start
-          allowFrom: el,          // anywhere on block
+          hold: 220,
+          allowFrom: el,
           ignoreFrom: 'button,.resize-handle,.delete-btn',
           listeners: {
             start: e => {
               beginInteractionSelectionGuard();
               disableEditing(e.target);
-              e.target.classList.add('dragging');
+              e.target.classList.add('dragging-active');
               e.target.setAttribute('data-start-rect', JSON.stringify(readRect(e.target)));
-              updateGhost(readRect(e.target));
+              updateGhost(readRect(e.target));       // show starting ghost
             },
             move: dragMove,
             end: e => {
               endInteractionSelectionGuard();
+              // remove the stored start rect now that we're done
+              e.target.removeAttribute('data-start-rect');
               dragEnd(e);
             }
           }
         })
         .resizable({
-          edges: { top: false, left: false, bottom: true, right: true },
+          edges: { top: false, left: false, right: true, bottom: true, bottomRight: true },
           listeners: {
             start: e => {
               beginInteractionSelectionGuard();
               disableEditing(e.target);
-              e.target.classList.add('resizing');
-              updateGhost(readRect(e.target));
+              e.target.classList.add('resizing-active');
               e.target.setAttribute('data-start-rect', JSON.stringify(readRect(e.target)));
+              updateGhost(readRect(e.target));       // show starting ghost
             },
             move: resizeMove,
             end: e => {
               endInteractionSelectionGuard();
+              e.target.removeAttribute('data-start-rect');
               resizeEnd(e);
             }
           }
         });
+
 
       el.querySelector('.delete-btn')?.addEventListener('click', () => {
         el.remove();
@@ -741,79 +746,95 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- drag/resize listeners ---
+  // --- DRAG / RESIZE LISTENERS ---
+
   function dragMove(e) {
-    const m = getMetrics();
-    const start = JSON.parse(e.target.getAttribute('data-start-rect'));
+    // 1) Make the real element follow the pointer (free movement)
     const dx = e.pageX - e.x0;
     const dy = e.pageY - e.y0;
+    e.target.style.transform = `translate(${dx}px, ${dy}px)`;
 
+    // 2) Compute the snapped grid target for the ghost
+    const m = getMetrics();
+    const start = JSON.parse(e.target.getAttribute('data-start-rect'));
     const colShift = Math.round(dx / (m.cellW + m.gap));
     const rowShift = Math.round(dy / (m.rowUnit + m.gap));
 
-    let ghost = {
+    const ghost = {
       ...start,
       colStart: Math.max(1, Math.min(start.colStart + colShift, m.cols - start.colSpan + 1)),
       rowStart: Math.max(1, start.rowStart + rowShift)
     };
 
     updateGhost(ghost);
-    applyPreview(ghost, e.target);
   }
+
   function dragEnd(e) {
-    e.target.classList.remove('dragging');
+    // Clear the visual translate on the block itself
+    e.target.style.transform = '';
+    e.target.classList.remove('dragging-active');
     restoreEditing(e.target);
 
+    // Commit to the ghost's snapped rect
     const final = ghostEl ? readRect(ghostEl) : null;
     removeGhost();
-    clearPreviewTransforms();
-    e.target.removeAttribute('data-start-rect');
+
+    // Safety: if for some reason we didn't compute a ghost, bail
     if (!final) return;
 
+    // Write the final rect to the dragged element and then reflow others
     const anchor = { ...final, el: e.target };
-    const layout = compactEmptyRows(                      // cascade -> gravity -> compact
-                     gravityUpRects(
-                       pushDownCascadeFull(anchor),
-                       e.target
-                     )
-                   );
+
+    // same cascade -> gravity -> compact you already use
+    const layout = compactEmptyRows(
+      gravityUpRects(
+        pushDownCascadeFull(anchor),
+        e.target
+      )
+    );
+
     writeRectsToDOM(layout);
     requestSave();
   }
 
   function resizeMove(e) {
+    // Leave the real element in place during resize;
+    // only show the snapped final size with the ghost
     const m = getMetrics();
     const start = JSON.parse(e.target.getAttribute('data-start-rect'));
-    let ghost = { ...start };
+    const ghost = { ...start };
 
     if (e.edges.right)  ghost.colSpan = Math.max(1, Math.round(e.rect.width  / (m.cellW + m.gap)));
     if (e.edges.bottom) ghost.rowSpan = Math.max(1, Math.round(e.rect.height / (m.rowUnit + m.gap)));
+
+    // clamp to grid
     if (ghost.colStart + ghost.colSpan - 1 > m.cols) {
       ghost.colSpan = m.cols - ghost.colStart + 1;
     }
 
     updateGhost(ghost);
-    applyPreview(ghost, e.target);
   }
+
   function resizeEnd(e) {
-    e.target.classList.remove('resizing');
+    e.target.classList.remove('resizing-active');
     restoreEditing(e.target);
 
     const final = ghostEl ? readRect(ghostEl) : null;
     removeGhost();
-    clearPreviewTransforms();
-    e.target.removeAttribute('data-start-rect');
     if (!final) return;
 
     const anchor = { ...final, el: e.target };
     const layout = compactEmptyRows(
-                     gravityUpRects(
-                       pushDownCascadeFull(anchor),
-                       e.target
-                     )
-                   );
+      gravityUpRects(
+        pushDownCascadeFull(anchor),
+        e.target
+      )
+    );
+
     writeRectsToDOM(layout);
     requestSave();
   }
+
 
   // ---------- Lock/UI ----------
   function setInteractivityEnabled(enabled) {

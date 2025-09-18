@@ -339,3 +339,19 @@ body {
 .block .block-content[data-align="left"]  { text-align: left;  align-items: flex-start; }
 .block .block-content[data-align="center"]{ text-align: center; align-items: center;     }
 .block .block-content[data-align="right"] { text-align: right; align-items: flex-end;    }
+
+
+
+
+/* Active visuals */
+.block.dragging-active,
+.block.resizing-active {
+  z-index: 60;
+  box-shadow: 0 12px 30px rgba(0,0,0,.18);
+}
+
+/* Make sure the preview never eats events */
+.block-ghost {
+  pointer-events: none;
+  z-index: 50;
+}
