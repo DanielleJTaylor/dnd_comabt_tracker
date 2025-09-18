@@ -67,6 +67,12 @@ body {
 }
 .btn:hover  { background: #6ca05b; }
 .btn:active { transform: translateY(1px); }
+.btn:disabled {
+    background: #b0b0b0;
+    border-color: #9e9e9e;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
 .btn.btn-status { pointer-events: none; opacity: .9; }
 
 /* Lock toggle colors (JS toggles text, not classes, so these are optional) */
@@ -127,7 +133,7 @@ body {
   border: 1px solid rgba(0,0,0,.08);
   border-radius: 10px;
   box-shadow: 0 2px 10px rgba(0,0,0,.06);
-  padding: 0px 12px 36px;     /* room for footer/handles */
+  padding: 8px 12px;     /* smaller padding */
   overflow: hidden;
   outline: none;               /* remove contenteditable outline */
   transition: box-shadow .12s ease, transform .04s ease;
@@ -141,7 +147,6 @@ body {
   line-height: 1.35;
   overflow-wrap: anywhere;
   caret-color: #222;
-  justify-content: center;
 }
 .block .block-content:empty:before {
   content: attr(data-placeholder);
@@ -161,23 +166,32 @@ body {
 .resize-handle:hover { background: rgba(0,0,0,.18); }
 .resize-handle.right        { top: 50%; right: -7px; transform: translateY(-50%); cursor: ew-resize; }
 .resize-handle.bottom       { left: 50%; bottom: -7px; transform: translateX(-50%); cursor: ns-resize; }
-/* FIX: your HTML uses 'bottom-right' but CSS previously had '.br' */
 .resize-handle.bottom-right { right: -7px; bottom: -7px; cursor: nwse-resize; }
 
-/* Delete button */
-.delete-btn {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  z-index: 4;
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  border: 0;
-  background: rgba(255,255,255,.85);
-  box-shadow: 0 1px 6px rgba(0,0,0,.12);
-  cursor: pointer;
+/* Block actions (top-right corner) */
+.block-actions {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 5;
+    display: flex;
+    gap: 4px;
+    opacity: 0; /* Initially hidden */
+    transition: opacity 0.15s ease;
 }
-.delete-btn:hover { background: #ffebea; color: #b71c1c; }
+.block:hover .block-actions {
+    opacity: 1; /* Show on hover */
+}
+.block-actions .icon-btn {
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(0,0,0,.08);
+    cursor: pointer;
+}
+.block-actions .icon-btn:hover { background: rgba(0,0,0,.15); }
+
 
 /* Dragging/Resizing feedback */
 .block.dragging { opacity: .85; transform: scale(.995); box-shadow: 0 12px 30px rgba(0,0,0,.18); }
@@ -193,17 +207,6 @@ body {
 /* Image helpers (when a block contains an image) */
 .img-wrap { position: relative; display: inline-block; max-width: 100%; width: 100%; height: 100%; }
 .img-wrap img { max-width: 100%; max-height: 100%; display: block; border-radius: 8px; object-fit: contain; }
-.img-actions { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; }
-.img-actions button {
-  border: 0;
-  background: rgba(255,255,255,.95);
-  border-radius: 999px;
-  padding: 6px 10px;
-  cursor: pointer;
-  font-weight: 700;
-  box-shadow: 0 1px 6px rgba(0,0,0,.12);
-}
-.img-actions button:hover { background: #fff; }
 
 /* Floating add-block button (only shown when unlocked) */
 #add-block-btn {
@@ -221,18 +224,15 @@ body {
 
 /* ---------- Locked UI (JS toggles .is-locked on #sheet-container) ---------- */
 .is-locked .resize-handle,
-.is-locked .delete-btn {
+.is-locked .block-actions {
   display: none !important;
 }
 .is-locked .block .block-content[contenteditable="true"] {
-  /* leave text selectable but prevent accidental edits to text blocks if desired */
   user-select: text;
 }
 
 /* ---------- Small screens ---------- */
 @media (max-width: 1024px) {
-  /* Keep the design width; the embed script will scale when in the right panel.
-     For full-page on phones, horizontal scroll is acceptable. */
   .grid-container,
   #blocks-container,
   .sheet,
@@ -244,7 +244,14 @@ body {
   #sheet-container { padding-bottom: 72px; }
 }
 
-
-
+/* add or update */
+.block-ghost{
+  z-index: 50;              /* higher than blocks */
+  pointer-events: none;     /* never capture the mouse */
+}
+.block.dragging,
+.block.resizing{
+  z-index: 10;              /* ensure the ghost can sit above */
+}
 
 

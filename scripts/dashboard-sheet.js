@@ -1,615 +1,870 @@
-/* scripts/dashboard-sheet.js
-   Grid editor (row-first behavior)
-   - Long-press to drag (prevents accidental drags)
-   - Bottom/right-only resize
-   - Commit rules:
-       • Push-down cascade only for blocks whose COLUMNS overlap the moved/resized block
-       • Never push left/right
-   - Gravity-up tidy:
-       • After any change, blocks climb straight up if there’s room (no horizontal moves)
-       • Eliminates completely empty rows
-*/
+// scripts/dashboard-sheet.js
+// Grid editor with Interact.js + live push-down preview (no horizontal moves)
+// - Hold anywhere on a block to drag (text editing disabled while moving)
+// - Bottom/right resize
+// - True push-down cascade using full-area collision checks
+// - Column gravity-up (close vertical gaps without horizontal moves)
+// - Global row compaction (cut empty rows)
+// - Live preview uses the same cascade+gravity+compact as commit
+// - Undo/Redo history snapshots on successful saves
+// - Import/Export, autosave, lock toggle, image blocks
 
-(() => {
-  'use strict';
+document.addEventListener('DOMContentLoaded', () => {
+  // ---------- DOM ----------
+  const blocksContainer  = document.getElementById('blocks-container');
+  const addBlockBtn      = document.getElementById('add-block-btn');
+  const lockButton       = document.getElementById('lock-toggle-btn');
+  const sheetContainer   = document.getElementById('sheet-container');
+  const formatToolbar    = document.getElementById('format-toolbar');
+  const exportBtn        = document.getElementById('export-btn');
+  const saveStatusBtn    = document.getElementById('save-status-btn');
 
-  // ---------- DOM helpers ----------
-  const qs  = (s) => document.querySelector(s);
-  const qsa = (s) => Array.from(document.querySelectorAll(s));
-
-  const canvas    = qs('#blocks-container') || qs('#sheetCanvas');
-  const titleEl   = qs('#sheet-title')      || qs('#sheetTitle');
-  const exportBtn = qs('#export-btn')       || qs('#exportBtn');
-  const backBtn   = qs('#dash-back')        || qs('#backBtn');
-  const addBtn    = qs('#add-block-btn')    || qs('#addBlockBtn') || qs('#fabAddBtn');
-  const lockBtn   = qs('#lock-toggle-btn')  || qs('#lockToggleBtn') || qs('[data-act="toggle-lock"]');
-  const saveBadge = qs('#save-status-btn')  || qs('#saveStatus')   || qs('#saveBadge');
-  const toolbar   = qs('#format-toolbar')   || null;
-
-  if (!canvas) {
-    console.error('dashboard-sheet.js: canvas not found');
-    return;
+  // Undo/Redo UI (inject if missing)
+  let undoBtn = document.getElementById('undo-btn');
+  let redoBtn = document.getElementById('redo-btn');
+  if (!undoBtn || !redoBtn) {
+    const wrap = document.createElement('div');
+    wrap.className = 'history-controls';
+    Object.assign(wrap.style, {
+      position: 'fixed', right: '16px', top: '16px',
+      display: 'flex', gap: '8px', zIndex: 1000
+    });
+    undoBtn = document.createElement('button');
+    redoBtn = document.createElement('button');
+    undoBtn.id = 'undo-btn'; redoBtn.id = 'redo-btn';
+    undoBtn.className = 'btn'; redoBtn.className = 'btn';
+    undoBtn.textContent = '↶ Undo'; redoBtn.textContent = '↷ Redo';
+    wrap.append(undoBtn, redoBtn);
+    document.body.appendChild(wrap);
   }
 
-  // ---------- State / storage ----------
-  const GRID_COLS = 12;
-  const DASH_ID   = new URLSearchParams(location.search).get('id') || 'dash_tmp';
-  const LS_KEY    = DASH_ID;
-
-  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-  const rnd   = (v) => Math.round(v);
-  const uid   = (p='b_') => `${p}${Date.now()}_${Math.floor(Math.random()*1e6)}`;
-
-  const load = () => { try { return JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch { return null; } };
-  const save = (obj) => { localStorage.setItem(LS_KEY, JSON.stringify(obj)); setSaved(true); };
-
-  let dash = load() || { id: LS_KEY, title: 'Untitled', blocks: [] };
-
-  // ---------- Grid metrics ----------
-  let unitW = 0, unitH = 0;
-  function measureUnits() {
-    const probe = document.createElement('div');
-    probe.style.gridColumn = '1 / span 1';
-    probe.style.gridRow    = '1 / span 1';
-    probe.style.visibility = 'hidden';
-    probe.style.pointerEvents = 'none';
-    canvas.appendChild(probe);
-    const r = probe.getBoundingClientRect();
-    unitW = canvas.clientWidth / GRID_COLS;
-    unitH = r.height || 40;
-    probe.remove();
+  // Import button (next to Export)
+  let importBtn = document.getElementById('import-btn');
+  if (!importBtn) {
+    importBtn = document.createElement('button');
+    importBtn.id = 'import-btn';
+    importBtn.className = 'btn';
+    importBtn.textContent = 'Import';
+    const headerRight = document.querySelector('.header-right') || document.body;
+    headerRight.insertBefore(importBtn, exportBtn || null);
   }
 
-  // ---------- Save badge ----------
+  // ---------- State ----------
+  const FORCE_LOCK = false;
+  let isLocked = false;                // start unlocked for editing
+  let ghostEl = null;                  // ghost preview element
+  const DASH_ID = getDashboardIdFromURL();
+
+  // History (Undo/Redo)
+  const hist = { past: [], future: [] };
+  const HISTORY_LIMIT = 100;
+
+  // Autosave
   let saveTimer = null;
-  function debouncedSave(){ clearTimeout(saveTimer); saveTimer = setTimeout(() => save(dash), 250); }
-  function setSaved(ok){ if (saveBadge){ saveBadge.textContent = ok ? 'Saved' : 'Unsaved'; saveBadge.classList.toggle('unsaved', !ok); } }
-  function dirty(){ setSaved(false); debouncedSave(); }
+  let lastSavedSnapshot = null;
 
-  // ---------- Normalization / placement ----------
-  function normalize(b){
-    const n = { ...b };
-    if (n.colStart == null && n.x != null) n.colStart = n.x + 1;
-    if (n.rowStart == null && n.y != null) n.rowStart = n.y + 1;
-    if (n.colSpan  == null && n.w != null) n.colSpan  = n.w;
-    if (n.rowSpan  == null && n.h != null) n.rowSpan  = n.h;
-
-    n.colStart = clamp(parseInt(n.colStart || 1, 10), 1, GRID_COLS);
-    n.colSpan  = clamp(parseInt(n.colSpan  || 3, 10), 1, GRID_COLS);
-    n.rowStart = Math.max(1, parseInt(n.rowStart || 1, 10));
-    n.rowSpan  = Math.max(1, parseInt(n.rowSpan  || 3, 10));
-    n.id   ||= uid();
-    n.type ||= 'text';
-    return n;
-  }
-  function placeCSS(el, b){
-    el.style.gridColumn = `${b.colStart} / span ${b.colSpan}`;
-    el.style.gridRow    = `${b.rowStart} / span ${b.rowSpan}`;
+  // ---------- Utils ----------
+  function getDashboardIdFromURL() {
+    const p = new URLSearchParams(location.search);
+    return p.get('id') || `dash_${Date.now()}`;
   }
 
-  // ---------- Geometry helpers ----------
-  const right    = (b) => b.colStart + b.colSpan;
-  const bottom   = (b) => b.rowStart + b.rowSpan;
-  const cOverlap = (a,b) => (a.colStart < right(b)) && (b.colStart < right(a));
-  const rOverlap = (a,b) => (a.rowStart < bottom(b)) && (b.rowStart < bottom(a));
-  const overlaps = (a,b) => cOverlap(a,b) && rOverlap(a,b);
+  function beginInteractionSelectionGuard() {
+    if (document.activeElement?.blur) document.activeElement.blur();
+    const sel = window.getSelection?.();
+    if (sel?.removeAllRanges) sel.removeAllRanges();
+    document.body.classList.add('no-select');
+  }
+  function endInteractionSelectionGuard() {
+    document.body.classList.remove('no-select');
+  }
 
-  // ---------- "Add-at-bottom" lock ----------
-  const minRowLock = new Map(); // id -> minRow to keep just-added blocks from snapping up immediately
+  // Temporarily disable editing on a block's content
+  function disableEditing(el) {
+    const c = el.querySelector('.block-content');
+    if (!c) return;
+    c.setAttribute('data-prev-ce', c.getAttribute('contenteditable') || 'true');
+    c.setAttribute('contenteditable', 'false');
+  }
+  function restoreEditing(el) {
+    const c = el.querySelector('.block-content');
+    if (!c) return;
+    const prev = c.getAttribute('data-prev-ce');
+    if (prev !== null) c.setAttribute('contenteditable', prev);
+    c.removeAttribute('data-prev-ce');
+  }
 
-  // ---------- Gravity-up (no empty rows; no horizontal movement) ----------
-  function gravityUp(priority=null){
-    // Place blocks in reading order; each climbs as far up as possible without overlapping placed ones
-    const blocks = dash.blocks.slice().sort((a,b)=>{
-      // let the priority block remain where user committed it (we'll try to keep its row stable)
-      if (priority){
-        if (a.id === priority.id) return -1;
-        if (b.id === priority.id) return  1;
-      }
-      const dr = a.rowStart - b.rowStart;
-      return dr !== 0 ? dr : (a.colStart - b.colStart);
-    });
+  // ---------- Grid Metrics ----------
+  function getMetrics() {
+    const cs = getComputedStyle(blocksContainer);
+    const cols = parseInt(cs.getPropertyValue('--grid-columns')) || 12;
+    const gap = parseFloat(cs.gap) || 0;
+    const contentW = blocksContainer.clientWidth;
+    const cellW = (contentW - gap * (cols - 1)) / cols;
+    const rowUnit = parseFloat(cs.getPropertyValue('--row-size')) || 64;
+    return { cols, gap, cellW, rowUnit };
+  }
 
-    const placed=[]; let changed=false;
-    for (const b of blocks){
-      const isPriority = priority && b.id === priority.id;
+  // ---------- Rect helpers ----------
+  function readRect(el) {
+    if (!el) return null;
+    return {
+      el,
+      colStart: +el.dataset.colStart,
+      rowStart: +el.dataset.rowStart,
+      colSpan: +el.dataset.colSpan,
+      rowSpan: +el.dataset.rowSpan
+    };
+  }
+  function writeRect(el, rect) {
+    if (!el || !rect) return;
+    el.dataset.colStart = rect.colStart;
+    el.dataset.rowStart = rect.rowStart;
+    el.dataset.colSpan = rect.colSpan;
+    el.dataset.rowSpan = rect.rowSpan;
+    el.style.gridColumn = `${rect.colStart} / span ${rect.colSpan}`;
+    el.style.gridRow = `${rect.rowStart} / span ${rect.rowSpan}`;
+  }
+  function writeRectsToDOM(rects) {
+    for (const r of rects) writeRect(r.el, r);
+  }
+  function getAllRects(excludeEl) {
+    return [...blocksContainer.querySelectorAll('.block')]
+      .filter(el => el !== excludeEl)
+      .map(readRect);
+  }
+
+  // ---------- Geometry (full-area overlap) ----------
+  function colsOverlap(a, b) {
+    return !(a.colStart + a.colSpan <= b.colStart || b.colStart + b.colSpan <= a.colStart);
+  }
+  function rowsOverlap(a, b) {
+    return !(a.rowStart + a.rowSpan <= b.rowStart || b.rowStart + b.rowSpan <= a.rowStart);
+  }
+  function rectsOverlap(a, b) {
+    return colsOverlap(a,b) && rowsOverlap(a,b);
+  }
+
+  // ---------- Push-down cascade (global, deterministic) ----------
+  function pushDownCascadeFull(anchorRect) {
+    // Start from DOM rects, replacing/adding anchor
+    const rects = getAllRects(null).map(r => ({ ...r }));
+    const i = rects.findIndex(r => r.el === anchorRect.el);
+    if (i >= 0) rects[i] = { ...anchorRect };
+    else rects.push({ ...anchorRect });
+
+    // Anchor placed first; others in reading order
+    const others = rects
+      .filter(r => r.el !== anchorRect.el)
+      .sort((a, b) => (a.rowStart - b.rowStart) || (a.colStart - b.colStart));
+
+    const placed = [{ ...anchorRect }];
+
+    for (const b of others) {
       let y = b.rowStart;
-      const minY = isPriority ? b.rowStart : (minRowLock.get(b.id) ?? 1);
-      // climb upward while no overlap with already placed blocks
-      climb: for (let tryY = y - 1; tryY >= minY; tryY--){
-        const probe = { ...b, rowStart: tryY };
-        if (placed.some(p => overlaps(probe, p))) break climb; // blocked; stop climbing
-        y = tryY;
+
+      // Push down until no overlap with placed blocks that share columns
+      while (true) {
+        const blockers = placed.filter(p => colsOverlap(b, p) && rowsOverlap({ ...b, rowStart: y }, p));
+        if (blockers.length === 0) break;
+        const minFree = Math.max(...blockers.map(p => p.rowStart + p.rowSpan));
+        y = minFree <= y ? y + 1 : minFree; // safety
       }
-      if (y !== b.rowStart){ b.rowStart = y; changed = true; }
-      placed.push({ ...b });
+
+      placed.push({ ...b, rowStart: y });
     }
-    if (changed) syncDOM();
+
+    return placed;
   }
 
-  // ---------- Push-down cascade limited to column-overlap ----------
-  function pushDownCascade(anchor){
-    // Anchor is already at its committed position.
-    // For every other block (top->bottom), if it would overlap any placed block AND has column overlap,
-    // move it directly below the lowest overlapping placed block. Repeat as needed (cascade).
-    const placed = [{ ...anchor }];
-    const others = dash.blocks
-      .filter(b => b.id !== anchor.id)
-      .slice()
-      .sort((a,b)=> (a.rowStart - b.rowStart) || (a.colStart - b.colStart));
+  // ----- Column gravity (remove vertical gaps; no horizontal moves) -----
+  function gravityUpRects(rects, priorityEl = null) {
+    const items = rects.map(r => ({ ...r }));
+    items.sort((a, b) => (a.rowStart - b.rowStart) || (a.colStart - b.colStart));
+    const placed = [];
 
-    let changed = false;
-    for (const b of others){
-      let newStart = b.rowStart;
-      while (true){
-        // find all placed blocks that overlap rows with b AND share columns
-        const colliders = placed.filter(p => cOverlap(b,p) && rOverlap(b,p));
-        if (!colliders.length) break;
-        // push b just below the lowest collider
-        const minBelow = Math.max(...colliders.map(p => p.rowStart + p.rowSpan));
-        if (minBelow <= newStart) { newStart = newStart + 1; } // safety in pathological cases
-        else newStart = minBelow;
+    for (const b0 of items) {
+      const b = { ...b0 };
+      let y = 1;
 
-        // update b to proposed new pos and re-check
-        b.rowStart = newStart;
-        changed = true;
+      for (const p of placed) {
+        if (colsOverlap(b, p)) {
+          y = Math.max(y, p.rowStart + p.rowSpan);
+        }
       }
-      placed.push({ ...b });
+      if (priorityEl && b.el === priorityEl) {
+        y = Math.max(y, b0.rowStart);
+      }
+      b.rowStart = y;
+      placed.push(b);
     }
-    if (changed) syncDOM();
+    return placed;
   }
 
-  // ---------- Sync DOM after layout changes ----------
-  function syncDOM(){
-    qsa('.block').forEach(el=>{
-      const bid = el.dataset.bid;
-      const bb = dash.blocks.find(x => x.id === bid);
-      if (bb) placeCSS(el, bb);
+  // ----- Cut globally empty rows (row compression) ----------------------------
+  // For every row index that NO block occupies, shift all rows below up by 1.
+  // Works on a list of rects: [{el, colStart, rowStart, colSpan, rowSpan}, ...]
+  function compactEmptyRows(rects) {
+    if (!rects?.length) return rects;
+
+    // Build a set of occupied row indices (inclusive ranges)
+    const occupied = new Set();
+    let maxBottom = 0;
+    for (const r of rects) {
+      const top = r.rowStart;
+      const bot = r.rowStart + r.rowSpan - 1;
+      for (let y = top; y <= bot; y++) occupied.add(y);
+      if (bot > maxBottom) maxBottom = bot;
+    }
+
+    // Create a mapping from old row -> new row after removing empty rows
+    let shift = 0;
+    const rowMap = new Map();
+    for (let y = 1; y <= maxBottom; y++) {
+      if (!occupied.has(y)) shift += 1; // empty row → pull up subsequent rows
+      rowMap.set(y, y - shift);
+    }
+
+    // Apply the mapping to each rect's rowStart (rowSpan stays the same)
+    return rects.map(r => {
+      const mapped = rowMap.get(r.rowStart) ?? r.rowStart;
+      return { ...r, rowStart: Math.max(1, mapped) };
     });
-    dirty();
   }
 
-  // ---- Auto-snap scheduler (background tidy with gravity-up) ----
-  let snapTimer = null;
-  function scheduleAutoSnap() {
-    clearTimeout(snapTimer);
-    snapTimer = setTimeout(() => gravityUp(null), 60);
-  }
-
-  // Run once on load
-  scheduleAutoSnap();
-
-  // Re-pack when window layout changes
-  window.addEventListener('resize', () => {
-    measureUnits();
-    scheduleAutoSnap();
-  });
-
-  // Re-pack when blocks are added/removed (DOM structure changes)
-  const mo = new MutationObserver(() => scheduleAutoSnap());
-  mo.observe(canvas, { childList: true, subtree: false });
-
-  // Save initial dash (ensures LS slot exists)
-  save(dash);
-
-  if (titleEl) {
-    titleEl.textContent = dash.title || 'Untitled';
-    if (titleEl.isContentEditable) {
-      titleEl.addEventListener('input', () => {
-        dash.title = (titleEl.textContent || '').trim() || 'Untitled';
-        setSaved(false);
-        debouncedSave();
-      });
-    }
-  }
-
-  // ---------- Lock ----------
-  let isLocked = !!dash.isLocked;
-  function setLocked(v){
-    isLocked = !!v;
-    dash.isLocked = isLocked;
-    document.documentElement.classList.toggle('sheet-locked', isLocked);
-    if (lockBtn) lockBtn.textContent = isLocked ? 'Locked' : 'Unlocked';
-    qsa('.block .handle, .block .close').forEach(el => { el.style.display = isLocked ? 'none' : ''; });
-  }
-
-  // ---------- Ghost preview ----------
-  let ghostEl = null;
-  function ensureGhost(){
-    if (!ghostEl){
+  // ---------- Live preview ----------
+  function updateGhost(rect) {
+    if (!ghostEl) {
       ghostEl = document.createElement('div');
       ghostEl.className = 'block-ghost';
-      Object.assign(ghostEl.style, {
-        pointerEvents: 'none',
-        border: '2px dashed rgba(0,0,0,.35)',
-        borderRadius: '8px',
-        background: 'transparent',
-        zIndex: '3'
-      });
-      canvas.appendChild(ghostEl);
+      blocksContainer.appendChild(ghostEl);
+    }
+    ghostEl.style.zIndex = '50';        // keep above blocks
+    ghostEl.style.pointerEvents = 'none';
+    writeRect(ghostEl, rect);
+    ghostEl.style.display = '';
+  }
+
+  function removeGhost() {
+    if (ghostEl) ghostEl.remove();
+    ghostEl = null;
+  }
+  function clearPreviewTransforms() {
+    blocksContainer.querySelectorAll('.block').forEach(el => { el.style.transform = ''; });
+  }
+  function applyPreview(ghostRect, activeEl) {
+    const tempAnchor = { ...ghostRect, el: activeEl };
+    const cascaded   = pushDownCascadeFull(tempAnchor);
+    const packed     = gravityUpRects(cascaded, activeEl);
+    const compacted  = compactEmptyRows(packed); // cut empty rows
+
+    const byEl = new Map(compacted.map(r => [r.el, r]));
+    const m = getMetrics();
+
+    for (const el of blocksContainer.querySelectorAll('.block')) {
+      if (el === activeEl) { el.style.transform = ''; continue; }
+      const real = readRect(el);
+      const nxt  = byEl.get(el);
+      if (!nxt) { el.style.transform = ''; continue; }
+      const dy = (nxt.rowStart - real.rowStart) * (m.rowUnit + m.gap);
+      el.style.transform = dy ? `translateY(${dy}px)` : '';
     }
   }
-  function showGhost(c, r, w, h){
-    ensureGhost();
-    ghostEl.style.display = '';
-    ghostEl.style.gridColumn = `${c} / span ${w}`;
-    ghostEl.style.gridRow    = `${r} / span ${h}`;
+
+  // ---------- Image blocks ----------
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
   }
-  function hideGhost(){
-    if (ghostEl) ghostEl.style.display = 'none';
+  function makeImageBlock(block, dataUrl) {
+    block.classList.add('image-block');
+    const content = block.querySelector('.block-content');
+    content.innerHTML = '';
+    content.setAttribute('contenteditable', 'false');
+
+    const wrap = document.createElement('div');
+    wrap.className = 'img-wrap';
+    wrap.innerHTML = `
+      <div class="img-actions">
+        <button data-img="replace" title="Replace">Replace</button>
+        <button data-img="remove"  title="Remove">Remove</button>
+        <button data-img="fit"     title="Fit">Fit</button>
+        <button data-img="fill"    title="Fill">Fill</button>
+      </div>
+      <img alt="">
+    `;
+    wrap.querySelector('img').src = dataUrl;
+    content.appendChild(wrap);
+
+    if (!isLocked) {
+      bindImageResizer(block);
+      bindImageActions(block);
+    } else {
+      wrap.querySelector('.img-actions')?.remove();
+      wrap.style.pointerEvents = 'none';
+    }
   }
+  function revokeImageBlock(block) {
+    block.classList.remove('image-block');
+    const content = block.querySelector('.block-content');
+    content.innerHTML = '';
+    content.setAttribute('contenteditable', 'true');
+    content.focus();
+  }
+  function bindImageResizer(block) {
+    if (isLocked) return;
+    const wrap = block.querySelector('.img-wrap');
+    if (!wrap) return;
+    const restrictRect = block.querySelector('.block-content');
 
-  // ---------- Long-press to drag ----------
-  const PRESS_MS = 180;
-  let press = null; // {el, block, startX, startY, moved, timer, cancelled}
+    interact(wrap).resizable({
+      edges: { right: true, bottom: true, bottomRight: true },
+      listeners: {
+        start() {
+          beginInteractionSelectionGuard();
+          wrap.classList.add('resizing-image');
+          const cs = getComputedStyle(wrap);
+          wrap.dataset.w = parseFloat(cs.width) || wrap.clientWidth;
+          wrap.dataset.h = parseFloat(cs.height) || wrap.clientHeight;
+        },
+        move(evt) {
+          const startW = parseFloat(wrap.dataset.w);
+          const startH = parseFloat(wrap.dataset.h);
+          let w = startW + evt.deltaRect.width;
+          let h = startH + evt.deltaRect.height;
 
-  function setupLongPressDrag(el, block){
-    el.addEventListener('pointerdown', (e) => {
-      if (isLocked) return;
-      const path = e.composedPath ? e.composedPath() : (e.path || []);
-      if (path.some(n => n && (n.classList?.contains('handle') || n.classList?.contains('close') || n.isContentEditable))) return;
+          const bounds = restrictRect.getBoundingClientRect();
+          const wr = wrap.getBoundingClientRect();
+          const maxW = bounds.width - (wr.left - bounds.left);
+          const maxH = bounds.height - (wr.top - bounds.top);
 
-      press = {
-        el, block,
-        startX: e.clientX,
-        startY: e.clientY,
-        moved: false,
-        cancelled: false,
-        timer: null
-      };
+          w = Math.max(40, Math.min(w, maxW));
+          h = Math.max(40, Math.min(h, maxH));
 
-      const cancel = () => {
-        if (!press) return;
-        press.cancelled = true;
-        clearTimeout(press.timer);
-        press = null;
-        window.removeEventListener('pointermove', onPressMove);
-        window.removeEventListener('pointerup', onPressUp);
-      };
-
-      const startDragFromPress = () => {
-        if (!press || press.cancelled) return;
-        onDragStart(e, el, block);
-      };
-
-      press.timer = setTimeout(startDragFromPress, PRESS_MS);
-      window.addEventListener('pointermove', onPressMove);
-      window.addEventListener('pointerup', onPressUp);
-
-      function onPressMove(ev){
-        if (!press) return;
-        const dx = Math.abs(ev.clientX - press.startX);
-        const dy = Math.abs(ev.clientY - press.startY);
-        if (dx > 3 || dy > 3) { press.moved = true; cancel(); }
+          wrap.style.width = `${w}px`;
+          wrap.style.height = `${h}px`;
+        },
+        end() {
+          wrap.classList.remove('resizing-image');
+          endInteractionSelectionGuard();
+          requestSave();
+        }
       }
-      function onPressUp(){ cancel(); }
+    });
+  }
+  function bindImageActions(block) {
+    if (isLocked) return;
+    const actions = block.querySelector('.img-actions');
+    const wrap = block.querySelector('.img-wrap');
+    const img = wrap?.querySelector('img');
+    if (!actions || !wrap || !img) return;
+
+    actions.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button'); if (!btn) return;
+      const act = btn.dataset.img;
+
+      if (act === 'replace') {
+        const inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = 'image/*'; inp.style.display = 'none';
+        document.body.appendChild(inp);
+        inp.onchange = async () => {
+          const file = inp.files?.[0];
+          if (file) { img.src = await fileToDataUrl(file); requestSave(); }
+          inp.remove();
+        };
+        inp.click();
+        return;
+      }
+      if (act === 'remove') { revokeImageBlock(block); requestSave(); return; }
+      if (act === 'fit')  { wrap.style.width = '100%'; wrap.style.height = '100%'; img.style.objectFit = 'contain'; requestSave(); return; }
+      if (act === 'fill') { wrap.style.width = '100%'; wrap.style.height = '100%'; img.style.objectFit = 'cover';   requestSave(); return; }
     });
   }
 
-  // ---------- Drag with preview ----------
-  let drag = null; // { el, block, startC, startR, startX, startY, moved }
-  let cancelOp = false;
+  // ---------- Save / Load / Import / Export ----------
+  function markSaving() {
+    if (!saveStatusBtn) return;
+    saveStatusBtn.textContent = 'Saving…';
+    saveStatusBtn.classList.add('saving');
+    saveStatusBtn.classList.remove('saved');
+  }
+  function markSaved() {
+    if (!saveStatusBtn) return;
+    saveStatusBtn.textContent = 'Saved';
+    saveStatusBtn.classList.remove('saving');
+    saveStatusBtn.classList.add('saved');
+  }
 
-  function onDragStart(e, el, block){
-    if (isLocked) return;
+  function serializeSheet() {
+    const title = document.getElementById('sheet-title')?.textContent?.trim() || 'Untitled Dashboard';
+    const blocks = [...blocksContainer.querySelectorAll('.block')].map(b => {
+      const rect = readRect(b);
+      if (b.classList.contains('image-block')) {
+        const wrap = b.querySelector('.img-wrap');
+        const img = wrap?.querySelector('img');
+        const objFit = img?.style?.objectFit || 'contain';
+        const w = parseFloat(wrap?.style?.width) || null;
+        const h = parseFloat(wrap?.style?.height) || null;
+        return {
+          type: 'image',
+          colStart: rect.colStart, rowStart: rect.rowStart,
+          colSpan: rect.colSpan, rowSpan: rect.rowSpan,
+          src: img?.src || '',
+          objectFit: objFit,
+          wrapSize: (w && h) ? { w, h } : null
+        };
+      }
+      return {
+        type: 'text',
+        colStart: rect.colStart, rowStart: rect.rowStart,
+        colSpan: rect.colSpan, rowSpan: rect.rowSpan,
+        html: b.querySelector('.block-content')?.innerHTML || ''
+      };
+    });
+    return JSON.stringify({ id: DASH_ID, title, blocks });
+  }
 
-    e.preventDefault();
-    cancelOp = false;
-    drag = {
-      el, block,
-      startC:block.colStart, startR:block.rowStart,
-      startX:e.clientX, startY:e.clientY,
-      moved:false
+  const deepEqualJSON = (a, b) => a === b;
+
+  function saveNow() {
+    const json = serializeSheet();
+    if (deepEqualJSON(json, lastSavedSnapshot)) { markSaved(); return; }
+    markSaving();
+    try {
+      localStorage.setItem(DASH_ID, json);
+      lastSavedSnapshot = json;
+      markSaved();
+      pushHistory(json);
+    } catch (e) {
+      console.error('Save failed:', e);
+    }
+  }
+  function requestSave(delay = 350) {
+    if (saveTimer) clearTimeout(saveTimer);
+    markSaving();
+    saveTimer = setTimeout(saveNow, delay);
+  }
+
+  // Accept both new and legacy shapes when importing
+  function normalizeImportedBlock(b) {
+    const colStart = Number.isFinite(+b.colStart) ? +b.colStart : (Number.isFinite(+b.x) ? (+b.x + 1) : 1);
+    const rowStart = Number.isFinite(+b.rowStart) ? +b.rowStart : (Number.isFinite(+b.y) ? (+b.y + 1) : 1);
+    const colSpan  = Number.isFinite(+b.colSpan)  ? +b.colSpan  : (Number.isFinite(+b.w) ? +b.w : 4);
+    const rowSpan  = Number.isFinite(+b.rowSpan)  ? +b.rowSpan  : (Number.isFinite(+b.h) ? +b.h : 4);
+
+    const out = {
+      type: b.type || (b.src ? 'image' : 'text'),
+      colStart: Math.max(1, colStart),
+      rowStart: Math.max(1, rowStart),
+      colSpan:  Math.max(1, colSpan),
+      rowSpan:  Math.max(1, rowSpan)
     };
-    document.addEventListener('pointermove', onDragMove);
-    document.addEventListener('pointerup', onDragEnd, { once:true });
-    document.addEventListener('keydown', onOpKey, { once:true });
 
-    showGhost(block.colStart, block.rowStart, block.colSpan, block.rowSpan);
-  }
-  function onDragMove(e){
-    if (!drag) return;
-    const dCols = rnd((e.clientX - drag.startX) / (unitW || 1));
-    const dRows = rnd((e.clientY - drag.startY) / (unitH || 1));
-    if (!drag.moved && (dCols !== 0 || dRows !== 0)) drag.moved = true;
-
-    const nc = clamp(drag.startC + dCols, 1, GRID_COLS - drag.block.colSpan + 1);
-    const nr = Math.max(1, drag.startR + dRows);
-
-    showGhost(nc, nr, drag.block.colSpan, drag.block.rowSpan);
-  }
-  function onDragEnd(){
-    document.removeEventListener('pointermove', onDragMove);
-    hideGhost();
-
-    if (!drag) return;
-    if (cancelOp){ drag=null; return; }
-    if (!drag.moved) { drag=null; return; }
-
-    // commit to ghost
-    const styles = ghostEl && ghostEl.style.display !== 'none' ? ghostEl.style : null;
-    let nc = drag.block.colStart, nr = drag.block.rowStart;
-    if (styles) {
-      const gc = styles.gridColumn.split('/');
-      const gr = styles.gridRow.split('/');
-      if (gc.length >= 1) nc = parseInt(gc[0].trim(),10) || nc;
-      if (gr.length >= 1) nr = parseInt(gr[0].trim(),10) || nr;
+    if (out.type === 'image') {
+      out.src = b.src || '';
+      out.objectFit = b.objectFit || 'contain';
+      if (b.wrapSize && Number.isFinite(+b.wrapSize.w) && Number.isFinite(+b.wrapSize.h)) {
+        out.wrapSize = { w: +b.wrapSize.w, h: +b.wrapSize.h };
+      }
+    } else {
+      out.html = b.html || b.text || '';
     }
-
-    drag.block.colStart = nc;
-    drag.block.rowStart = nr;
-    placeCSS(drag.el, drag.block);
-
-    // Phase 1: push-down only those with column overlap
-    pushDownCascade(drag.block);
-    // Phase 2: gravity-up (remove empty rows)
-    gravityUp(drag.block);
-
-    dirty();
-    drag=null;
+    return out;
+  }
+  function normalizeImportedSheet(payload) {
+    const title = (payload.title || 'Imported Dashboard').toString();
+    const list = Array.isArray(payload.blocks) ? payload.blocks : [];
+    return { id: DASH_ID, title, blocks: list.map(normalizeImportedBlock) };
+  }
+  async function importSheetFromFile(file) {
+    let json;
+    try { json = JSON.parse(await file.text()); }
+    catch { alert('Invalid JSON.'); return; }
+    const data = normalizeImportedSheet(json);
+    localStorage.setItem(DASH_ID, JSON.stringify(data));
+    applySheetData(data);
+    // pack after load
+    writeRectsToDOM(compactEmptyRows(gravityUpRects(getAllRects(null))));
+    markSaved();
+    pushHistory(JSON.stringify(data));
   }
 
-  // ---------- Resize with preview (bottom/right only) ----------
-  let rez = null; // { el, block, edge, startX, startY, startC, startR, startW, startH }
+  // ---------- History ----------
+  function pushHistory(jsonString) {
+    if (!jsonString) return;
+    if (hist.past.length && hist.past[hist.past.length - 1] === jsonString) return;
+    hist.past.push(jsonString);
+    if (hist.past.length > HISTORY_LIMIT) hist.past.shift();
+    hist.future.length = 0;
+    updateHistoryButtons();
+  }
+  function updateHistoryButtons() {
+    if (undoBtn) { undoBtn.disabled = hist.past.length <= 1; undoBtn.style.opacity = undoBtn.disabled ? .5 : 1; }
+    if (redoBtn) { redoBtn.disabled = !hist.future.length;   redoBtn.style.opacity = redoBtn.disabled ? .5 : 1; }
+  }
+  function undo() {
+    if (hist.past.length <= 1) return;
+    const cur = hist.past.pop();
+    hist.future.push(cur);
+    const prev = hist.past[hist.past.length - 1];
+    if (prev) { try { applySheetData(JSON.parse(prev)); lastSavedSnapshot = prev; } catch(e){} }
+    // pack after apply
+    writeRectsToDOM(compactEmptyRows(gravityUpRects(getAllRects(null))));
+    updateHistoryButtons();
+  }
+  function redo() {
+    if (!hist.future.length) return;
+    const next = hist.future.pop();
+    hist.past.push(next);
+    try { applySheetData(JSON.parse(next)); lastSavedSnapshot = next; } catch(e){}
+    // pack after apply
+    writeRectsToDOM(compactEmptyRows(gravityUpRects(getAllRects(null))));
+    updateHistoryButtons();
+  }
 
-  function onResizeStart(e, el, block, edge){
+  // ---------- Blocks ----------
+  function createNewBlock() {
     if (isLocked) return;
-    e.preventDefault(); e.stopPropagation();
-    cancelOp = false;
+    const rect = dropToFreeRow({ colStart: 1, rowStart: 1, colSpan: 4, rowSpan: 4 }, null);
+    const block = document.createElement('div');
+    block.className = 'block';
+    block.innerHTML = `
+      <div class="block-content" contenteditable="true"></div>
+      <button class="delete-btn" title="Delete Block">×</button>
+      <div class="resize-handle right"></div>
+      <div class="resize-handle bottom"></div>
+      <div class="resize-handle bottom-right"></div>
+    `;
+    writeRect(block, rect);
+    blocksContainer.appendChild(block);
+    bindBlockEvents(block);
+    block.querySelector('.block-content').focus();
 
-    rez = {
-      el, block, edge,
-      startX:e.clientX, startY:e.clientY,
-      startC:block.colStart, startR:block.rowStart,
-      startW:block.colSpan,  startH:block.rowSpan
-    };
-    document.addEventListener('pointermove', onResizeMove);
-    document.addEventListener('pointerup', onResizeEnd, { once:true });
-    document.addEventListener('keydown', onOpKey, { once:true });
-
-    showGhost(block.colStart, block.rowStart, block.colSpan, block.rowSpan);
-  }
-  function onResizeMove(e){
-    if (!rez) return;
-    const dx = e.clientX - rez.startX;
-    const dy = e.clientY - rez.startY;
-    let dCols = rnd(dx / (unitW || 1));
-    let dRows = rnd(dy / (unitH || 1));
-
-    let c = rez.block.colStart, r = rez.block.rowStart;
-    let w = rez.block.colSpan,  h = rez.block.rowSpan;
-
-    if (rez.edge.includes('r') || rez.edge.includes('br')) w = clamp(rez.startW + dCols, 1, GRID_COLS - rez.startC + 1);
-    if (rez.edge.includes('b') || rez.edge.includes('br')) h = Math.max(1, rez.startH + dRows);
-
-    showGhost(c, r, w, h);
-  }
-  function onResizeEnd(){
-    document.removeEventListener('pointermove', onResizeMove);
-    hideGhost();
-
-    if (!rez) return;
-    if (cancelOp){ rez=null; return; }
-
-    // commit to ghost
-    const gc = ghostEl && ghostEl.style.gridColumn.split('/');
-    const gr = ghostEl && ghostEl.style.gridRow.split('/');
-    let c = rez.block.colStart, r = rez.block.rowStart, w = rez.block.colSpan, h = rez.block.rowSpan;
-    if (gc && gc.length >= 2) { c = parseInt(gc[0].trim(),10) || c; w = parseInt(gc[1].replace('span','').trim(),10) || w; }
-    if (gr && gr.length >= 2) { r = parseInt(gr[0].trim(),10) || r; h = parseInt(gr[1].replace('span','').trim(),10) || h; }
-
-    Object.assign(rez.block, { colStart:c, rowStart:r, colSpan:w, rowSpan:h });
-    placeCSS(rez.el, rez.block);
-
-    // Phase 1: push-down only for column-overlap colliders
-    pushDownCascade(rez.block);
-    // Phase 2: gravity-up
-    gravityUp(rez.block);
-
-    dirty();
-    rez=null;
+    // pack after add
+    writeRectsToDOM(compactEmptyRows(gravityUpRects(getAllRects(null))));
+    requestSave();
   }
 
-  // Cancel current op with Esc
-  function onOpKey(e){
-    if (e.key !== 'Escape') return;
-    hideGhost();
-    if (drag) {
-      document.removeEventListener('pointermove', onDragMove);
-      drag=null;
-    }
-    if (rez) {
-      document.removeEventListener('pointermove', onResizeMove);
-      rez=null;
-    }
+  // Helper: find a free row (baseline insert)
+  function dropToFreeRow(rect, excludeEl) {
+    let test = { ...rect };
+    while (getAllRects(excludeEl).some(r => rectsOverlap(test, r))) test.rowStart += 1;
+    return test;
   }
 
-  // ---------- Render blocks ----------
-  function makeBlockEl(block){
+  function makeBlockEl(b) {
     const el = document.createElement('div');
     el.className = 'block';
-    el.dataset.bid = block.id;
-    el.style.position = 'relative';
-    el.style.paddingTop = '0';
-    placeCSS(el, block);
+    el.innerHTML = `
+      <div class="block-content" contenteditable="true"></div>
+      <button class="delete-btn" title="Delete Block">×</button>
+      <div class="resize-handle right"></div>
+      <div class="resize-handle bottom"></div>
+      <div class="resize-handle bottom-right"></div>
+    `;
+    writeRect(el, { colStart: b.colStart, rowStart: b.rowStart, colSpan: b.colSpan, rowSpan: b.rowSpan });
+    blocksContainer.appendChild(el);
 
-    const content = document.createElement('div');
-    content.className = 'content';
-    content.style.height = '100%';
-    content.style.display = 'flex';
-    content.style.flexDirection = 'column';
-    content.style.justifyContent = 'center';
-
-    if (block.type === 'image') {
-      const img = document.createElement('img');
-      img.alt = block.alt || '';
-      img.style.maxWidth  = '100%';
-      img.style.maxHeight = '100%';
-      img.style.objectFit = block.objectFit || 'contain';
-      img.src = block.src || '';
-      content.appendChild(img);
-
-      content.addEventListener('click', () => {
-        if (isLocked) return;
-        const url = prompt('Image URL:', block.src || '');
-        if (url == null) return;
-        block.src = url.trim();
-        img.src   = block.src;
-        dirty();
-      });
+    if (b.type === 'image') {
+      makeImageBlock(el, b.src || '');
+      const wrap = el.querySelector('.img-wrap');
+      const img  = wrap?.querySelector('img');
+      if (img && b.objectFit) img.style.objectFit = b.objectFit;
+      if (wrap && b.wrapSize?.w && b.wrapSize?.h) {
+        wrap.style.width = `${b.wrapSize.w}px`;
+        wrap.style.height = `${b.wrapSize.h}px`;
+      } else {
+        wrap.style.width = '100%';
+        wrap.style.height = '100%';
+      }
     } else {
-      const inner = document.createElement('div');
-      inner.className = 'text';
-      inner.setAttribute('contenteditable', 'true');
-      inner.style.marginBlockStart = '0';
-      inner.innerHTML = block.html || '';
-      inner.addEventListener('input', () => { block.html = inner.innerHTML; dirty(); });
-      content.appendChild(inner);
+      el.querySelector('.block-content').innerHTML = b.html || '';
     }
 
-    // Resize handles: right, bottom, bottom-right
-    const addHandle = (cls, edge, styleObj) => {
-      const h = document.createElement('div');
-      h.className = `handle ${cls}`;
-      Object.assign(h.style, {
-        position: 'absolute',
-        width: '12px', height: '12px',
-        background: 'rgba(0,0,0,.12)',
-        borderRadius: '6px',
-        zIndex: '5',
-        ...styleObj,
-      });
-      h.title = 'Resize';
-      h.addEventListener('pointerdown', (e) => onResizeStart(e, el, block, edge));
-      el.appendChild(h);
-    };
-    addHandle('h-r',  'r',  { right:'-6px', top:'50%', transform:'translateY(-50%)', cursor:'ew-resize' });
-    addHandle('h-b',  'b',  { bottom:'-6px', left:'50%', transform:'translateX(-50%)', cursor:'ns-resize' });
-    addHandle('h-br', 'br', { right:'-6px', bottom:'-6px', cursor:'se-resize' });
-
-    // Delete button
-    const close = document.createElement('button');
-    close.className = 'close';
-    close.type = 'button';
-    close.textContent = '×';
-    Object.assign(close.style, {
-      position: 'absolute',
-      top:'4px', right:'4px',
-      width:'22px', height:'22px',
-      lineHeight:'20px', textAlign:'center',
-      borderRadius:'11px', border:'none',
-      background:'rgba(0,0,0,.15)', color:'#000',
-      cursor:'pointer', zIndex:'6'
-    });
-    close.title = 'Delete block';
-    close.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (isLocked) return;
-      if (!confirm('Delete this block?')) return;
-      const i = dash.blocks.findIndex(b => b.id === block.id);
-      if (i >= 0) dash.blocks.splice(i, 1);
-      el.remove();
-      gravityUp(null);
-      dirty();
-    });
-
-    el.appendChild(content);
-    el.appendChild(close);
-
-    // long-press to drag
-    setupLongPressDrag(el, block);
-
+    bindBlockEvents(el);
     if (isLocked) {
-      qsa('.handle, .close', el).forEach(h => h.style.display = 'none');
+      el.querySelector('.delete-btn')?.remove();
+      el.querySelectorAll('.resize-handle')?.forEach(h => h.remove());
     }
-    return el;
   }
 
-  function renderAll(){
-    canvas.innerHTML = '';
-    measureUnits();
-    dash.blocks = (dash.blocks || []).map(normalize);
-    dash.blocks.forEach(b => canvas.appendChild(makeBlockEl(b)));
-    gravityUp(null); // initial tidy
-    setLocked(isLocked);
+  function applySheetData(data) {
+    const titleEl = document.getElementById('sheet-title');
+    if (titleEl && data.title) titleEl.textContent = data.title;
+
+    blocksContainer.innerHTML = '';
+    (data.blocks || []).forEach(makeBlockEl);
+
+    // pack once after render
+    writeRectsToDOM(compactEmptyRows(gravityUpRects(getAllRects(null))));
+
+    lastSavedSnapshot = JSON.stringify(data);
+    markSaved();
   }
 
-  // ---------- Add blocks (ALWAYS at bottom) ----------
-  function nextBottomRow() {
-    if (!dash.blocks || !dash.blocks.length) return 1;
-    return dash.blocks.reduce((m, b) => Math.max(m, bottom(b)), 0) + 1;
-  }
-  function addTextBlock({ c=1, w=3, h=3, html='' } = {}){
-    const r = nextBottomRow();
-    const b = normalize({ id: uid(), type:'text', colStart:c, rowStart:r, colSpan:w, rowSpan:h, html });
-    dash.blocks.push(b);
-    const el = makeBlockEl(b);
-    canvas.appendChild(el);
-    minRowLock.set(b.id, r);
-    gravityUp(null);
-    setTimeout(() => minRowLock.delete(b.id), 250);
-    dirty();
-  }
-  function addImageBlock({ c=1, w=4, h=4, src='' } = {}){
-    const r = nextBottomRow();
-    const b = normalize({ id: uid(), type:'image', colStart:c, rowStart:r, colSpan:w, rowSpan:h, src, objectFit:'contain' });
-    dash.blocks.push(b);
-    const el = makeBlockEl(b);
-    canvas.appendChild(el);
-    minRowLock.set(b.id, r);
-    gravityUp(null);
-    setTimeout(() => minRowLock.delete(b.id), 250);
-    dirty();
-  }
+  // ---------- Interact bindings ----------
+  function bindBlockEvents(el) {
+    const content = el.querySelector('.block-content');
 
-  // ---------- Toolbar (neutral formatting) ----------
-  function exec(cmd, val=null){ document.execCommand(cmd, false, val); }
-  if (toolbar) {
-    toolbar.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-command]');
-      if (!btn) return;
-      const cmd = btn.dataset.command;
-      const val = btn.dataset.value || null;
-      if (cmd === 'formatBlock') document.execCommand('formatBlock', false, val || 'P');
-      else exec(cmd, val);
+    if (!isLocked) {
+      interact(el)
+        .draggable({
+          hold: 220,              // long-press to start
+          allowFrom: el,          // anywhere on block
+          ignoreFrom: 'button,.resize-handle',
+          listeners: {
+            start: e => {
+              beginInteractionSelectionGuard();
+              disableEditing(e.target);
+              e.target.classList.add('dragging');
+              e.target.setAttribute('data-start-rect', JSON.stringify(readRect(e.target)));
+              updateGhost(readRect(e.target));
+            },
+            move: dragMove,
+            end: e => {
+              endInteractionSelectionGuard();
+              dragEnd(e);
+            }
+          }
+        })
+        .resizable({
+          edges: { top: false, left: false, bottom: true, right: true },
+          listeners: {
+            start: e => {
+              beginInteractionSelectionGuard();
+              disableEditing(e.target);
+              e.target.classList.add('resizing');
+              updateGhost(readRect(e.target));
+              e.target.setAttribute('data-start-rect', JSON.stringify(readRect(e.target)));
+            },
+            move: resizeMove,
+            end: e => {
+              endInteractionSelectionGuard();
+              resizeEnd(e);
+            }
+          }
+        });
+
+      el.querySelector('.delete-btn')?.addEventListener('click', () => {
+        el.remove();
+        // pack after delete
+        writeRectsToDOM(compactEmptyRows(gravityUpRects(getAllRects(null))));
+        requestSave();
+      });
+    }
+
+    // Save on text edits
+    content.addEventListener('input', () => requestSave());
+    content.addEventListener('blur', () => requestSave());
+
+    // Paste/drop images when unlocked
+    content.addEventListener('paste', async (e) => {
+      if (!isLocked) {
+        const cd = e.clipboardData; if (!cd) return;
+        const file = [...cd.files].find(f => f.type.startsWith('image/'));
+        if (file) {
+          e.preventDefault();
+          const url = await fileToDataUrl(file);
+          makeImageBlock(el, url);
+          requestSave();
+          return;
+        }
+        const html = cd.getData('text/html');
+        if (html) {
+          const tmp = document.createElement('div'); tmp.innerHTML = html;
+          const pastedImg = tmp.querySelector('img[src]');
+          if (pastedImg?.src) {
+            e.preventDefault();
+            makeImageBlock(el, pastedImg.src);
+            requestSave();
+            return;
+          }
+        }
+        if (el.classList.contains('image-block')) e.preventDefault();
+      }
     });
-    const formatSel = toolbar.querySelector('select[data-command="formatBlock"]');
-    if (formatSel) formatSel.addEventListener('change', () =>
-      document.execCommand('formatBlock', false, formatSel.value || 'P')
-    );
-  }
+    content.addEventListener('dragover', (e) => { if (!isLocked) e.preventDefault(); });
+    content.addEventListener('drop', async (e) => {
+      if (isLocked) return;
+      e.preventDefault();
+      const dt = e.dataTransfer;
+      const file = [...(dt.files || [])].find(f => f.type.startsWith('image/'));
+      if (file) { const url = await fileToDataUrl(file); makeImageBlock(el, url); requestSave(); return; }
+      const html = dt.getData('text/html');
+      if (html) {
+        const tmp = document.createElement('div'); tmp.innerHTML = html;
+        const droppedImg = tmp.querySelector('img[src]');
+        if (droppedImg?.src) { makeImageBlock(el, droppedImg.src); requestSave(); }
+      }
+    });
 
-  // ---------- Buttons ----------
-  if (lockBtn) lockBtn.addEventListener('click', () => { setLocked(!isLocked); dirty(); });
-  if (backBtn) backBtn.addEventListener('click', () => history.back());
-  if (addBtn) {
-    addBtn.addEventListener('click', () => {
-      const t = prompt('Add new block: "text" or "image"', 'text');
-      if (!t) return;
-      if (t.toLowerCase().startsWith('i')) addImageBlock({ w:4, h:4 });
-      else addTextBlock({ w:3, h:3 });
+    // block typing in image mode when locked
+    content.addEventListener('keydown', (e) => {
+      if (!el.classList.contains('image-block')) return;
+      if (isLocked) { e.preventDefault(); return; }
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault(); revokeImageBlock(el); requestSave(); return;
+      }
+      e.preventDefault();
     });
   }
-  if (exportBtn) {
-    exportBtn.addEventListener('click', () => {
-      const blob = new Blob([JSON.stringify(dash, null, 2)], { type: 'application/json' });
+
+  // --- drag/resize listeners ---
+  function dragMove(e) {
+    const m = getMetrics();
+    const start = JSON.parse(e.target.getAttribute('data-start-rect'));
+    const dx = e.pageX - e.x0;
+    const dy = e.pageY - e.y0;
+
+    const colShift = Math.round(dx / (m.cellW + m.gap));
+    const rowShift = Math.round(dy / (m.rowUnit + m.gap));
+
+    let ghost = {
+      ...start,
+      colStart: Math.max(1, Math.min(start.colStart + colShift, m.cols - start.colSpan + 1)),
+      rowStart: Math.max(1, start.rowStart + rowShift)
+    };
+
+    updateGhost(ghost);
+    applyPreview(ghost, e.target);
+  }
+  function dragEnd(e) {
+    e.target.classList.remove('dragging');
+    restoreEditing(e.target);
+
+    const final = ghostEl ? readRect(ghostEl) : null;
+    removeGhost();
+    clearPreviewTransforms();
+    e.target.removeAttribute('data-start-rect');
+    if (!final) return;
+
+    const anchor = { ...final, el: e.target };
+    const layout = compactEmptyRows(                      // cascade -> gravity -> compact
+                     gravityUpRects(
+                       pushDownCascadeFull(anchor),
+                       e.target
+                     )
+                   );
+    writeRectsToDOM(layout);
+    requestSave();
+  }
+
+  function resizeMove(e) {
+    const m = getMetrics();
+    const start = JSON.parse(e.target.getAttribute('data-start-rect'));
+    let ghost = { ...start };
+
+    if (e.edges.right)  ghost.colSpan = Math.max(1, Math.round(e.rect.width  / (m.cellW + m.gap)));
+    if (e.edges.bottom) ghost.rowSpan = Math.max(1, Math.round(e.rect.height / (m.rowUnit + m.gap)));
+    if (ghost.colStart + ghost.colSpan - 1 > m.cols) {
+      ghost.colSpan = m.cols - ghost.colStart + 1;
+    }
+
+    updateGhost(ghost);
+    applyPreview(ghost, e.target);
+  }
+  function resizeEnd(e) {
+    e.target.classList.remove('resizing');
+    restoreEditing(e.target);
+
+    const final = ghostEl ? readRect(ghostEl) : null;
+    removeGhost();
+    clearPreviewTransforms();
+    e.target.removeAttribute('data-start-rect');
+    if (!final) return;
+
+    const anchor = { ...final, el: e.target };
+    const layout = compactEmptyRows(
+                     gravityUpRects(
+                       pushDownCascadeFull(anchor),
+                       e.target
+                     )
+                   );
+    writeRectsToDOM(layout);
+    requestSave();
+  }
+
+  // ---------- Lock/UI ----------
+  function setInteractivityEnabled(enabled) {
+    document.querySelectorAll('.block').forEach((el) => {
+      interact(el).draggable({ enabled });
+      interact(el).resizable({ enabled });
+      el.querySelector('.delete-btn')?.classList.toggle('hidden', !enabled);
+      el.querySelectorAll('.resize-handle')?.forEach(h => h.classList.toggle('hidden', !enabled));
+    });
+    document.querySelectorAll('.block .block-content').forEach(content => {
+      const inImage = content.closest('.image-block');
+      content.setAttribute('contenteditable', String(!inImage)); // text blocks editable
+    });
+  }
+  function applyLockedUI() {
+    sheetContainer.classList.toggle('is-locked', isLocked);
+    if (lockButton) lockButton.textContent = isLocked ? '🔒 Locked' : '🔓 Unlocked';
+    setInteractivityEnabled(!isLocked);
+    if (addBlockBtn) { addBlockBtn.classList.toggle('hidden', isLocked); addBlockBtn.disabled = isLocked; }
+  }
+  function toggleLock() { if (FORCE_LOCK) return; isLocked = !isLocked; applyLockedUI(); }
+
+  // ---------- Wiring ----------
+  importBtn?.addEventListener('click', () => {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'application/json'; inp.style.display = 'none';
+    document.body.appendChild(inp);
+    inp.onchange = async () => { const file = inp.files?.[0]; if (file) await importSheetFromFile(file); inp.remove(); };
+    inp.click();
+  });
+  exportBtn?.addEventListener('click', () => {
+    try {
+      const json = serializeSheet();
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = (dash.title || 'dashboard') + '.json';
-      a.click();
-      URL.revokeObjectURL(a.href);
-    });
-  }
+      const safeTitle = (document.getElementById('sheet-title')?.textContent || 'dashboard')
+        .trim().replace(/[^\w\-]+/g, '_');
+      a.href = url; a.download = `${safeTitle || 'dashboard'}.json`;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    } catch (e) { console.error('Export failed:', e); }
+  });
+  undoBtn?.addEventListener('click', undo);
+  redoBtn?.addEventListener('click', redo);
+  lockButton?.addEventListener('click', toggleLock);
+  addBlockBtn?.addEventListener('click', createNewBlock);
+  document.getElementById('sheet-title')?.addEventListener('input', () => requestSave());
+  document.getElementById('sheet-title')?.addEventListener('blur', () => requestSave());
+
+  formatToolbar?.addEventListener('click', (e) => {
+    const cmd = e.target.closest('button')?.dataset.command;
+    if (cmd) document.execCommand(cmd, false, null);
+  });
+  formatToolbar?.addEventListener('change', (e) => {
+    const sel = e.target.closest('select');
+    if (sel?.dataset.command === 'formatBlock') document.execCommand(sel.dataset.command, false, sel.value);
+  });
 
   // ---------- Init ----------
-  renderAll();
+  function loadOrInit() {
+    const raw = localStorage.getItem(DASH_ID);
+    if (raw) {
+      try {
+        const data = normalizeImportedSheet(JSON.parse(raw));
+        applySheetData(data);
+        // pack after load
+        writeRectsToDOM(compactEmptyRows(gravityUpRects(getAllRects(null))));
+        pushHistory(JSON.stringify(data));
+        return;
+      } catch (e) { console.warn('Failed to parse saved dashboard; starting fresh.', e); }
+    }
+    const starter = { type: 'text', colStart: 1, rowStart: 1, colSpan: 4, rowSpan: 4, html: 'Start typing…' };
+    applySheetData({ id: DASH_ID, title: 'Untitled Dashboard', blocks: [starter] });
+    writeRectsToDOM(compactEmptyRows(gravityUpRects(getAllRects(null))));
+    requestSave(0);
+  }
 
-  // Expose helpers
-  window.__sheet = {
-    get data(){ return dash; },
-    set data(v){ dash = v; renderAll(); dirty(); },
-    addTextBlock, addImageBlock, renderAll,
-    setLocked,
-    gravityUp, pushDownCascade
-  };
-})();
+  applyLockedUI();
+  loadOrInit();
+  updateHistoryButtons();
+});

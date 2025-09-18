@@ -11,12 +11,14 @@
 </head>
 <body>
     <div id="sheet-container">
-            <header class="sheet-header">
+        <header class="sheet-header">
             <div class="header-left">
                 <a href="view-dashboards.html" id="dash-back" class="btn">← Back</a>
                 <h1 id="sheet-title" contenteditable="true">Untitled Dashboard</h1>
             </div>
             <div class="header-right">
+                <button id="undo-btn" class="btn" title="Undo (Ctrl+Z)" disabled>↩️ Undo</button>
+                <button id="redo-btn" class="btn" title="Redo (Ctrl+Y)" disabled>↪️ Redo</button>
                 <button id="export-btn" class="btn">Export</button>
                 <button id="save-status-btn" class="btn btn-status">Saved</button>
                 <button id="lock-toggle-btn" class="btn unlocked">🔓 Unlocked</button>
