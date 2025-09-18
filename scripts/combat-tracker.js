@@ -1238,7 +1238,6 @@
     const paintCombatant = (c, inGroup = false, scheme = null) => {
       const hpNum = Number(c.hp) || 0;
 
-      // NEW: hide dead rows only in UI when toggle is OFF (keeps order intact)
       if (!showDead && hpNum <= 0) return;
 
       const isSelected = selectedCombatantIds.has(c.id);
@@ -1300,10 +1299,21 @@
         <div class="cell dashboard-link-cell"><button title="Toggle Dashboard">📄</button></div>
       `;
 
-      // (keep your slots-inline block as-is)
-      // ...
+      // Append the main row
       combatantListBody.appendChild(row);
+
+      // 🔽 NEW: render the inline spell slots panel when toggled on
+      if (c._slotsOpen) {
+        ensureSpellData(c);                   // make sure structure exists
+        const wrap = document.createElement('div');
+        wrap.className = 'slots-inline';
+        wrap.dataset.id = c.id;
+        wrap.style.gridColumn = '1 / -1';     // span full width under the row
+        wrap.innerHTML = buildSlotsInlineHTML(c);
+        combatantListBody.appendChild(wrap);
+      }
     };
+
 
 
     // Paint everything
