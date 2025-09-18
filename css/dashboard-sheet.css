@@ -260,16 +260,24 @@ body {
 
 
 /* ---- Fix list spacing/centering inside sheet blocks ---- */
+/* ---- Center the content stack, but don't force text-align ---- */
 .block .block-content{
   width: 100%;
   height: 100%;
-  display: flex;                 /* override earlier grid */
+  display: flex;
   flex-direction: column;
-  align-items: center;           /* horizontal center */
-  justify-content: center;       /* vertical center */
-  gap: .35rem;                   /* controlled spacing instead of margins */
-  text-align: center;            /* headings/labels centered */
+
+  /* vertical centering of the whole stack */
+  justify-content: center;
+
+  /* horizontal centering of the stack itself (default) */
+  align-items: center;
+
+  gap: .35rem;
+  /* IMPORTANT: do NOT hard-force text-align here */
+  text-align: initial;
 }
+
 
 /* Kill default margins so lists don't push content down */
 .block .block-content > *{ margin: 0; }
@@ -325,3 +333,9 @@ body {
   align-items: center;
   gap: .4rem;
 }
+
+
+/* Per-block text alignment controlled by data-align */
+.block .block-content[data-align="left"]  { text-align: left;  align-items: flex-start; }
+.block .block-content[data-align="center"]{ text-align: center; align-items: center;     }
+.block .block-content[data-align="right"] { text-align: right; align-items: flex-end;    }
