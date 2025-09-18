@@ -53,7 +53,7 @@
     return isConditionVisibleNow(cond, snap) && remainingRoundsNow(cond, snap) > 0;
   }
 
-  // --- HP state & icon (updated thresholds/emojis) -------------------------
+  // --- HP state & icon (matches tracker semantics) -------------------------
   function hpStateAndIcon(hp, maxHp) {
     if (!Number.isFinite(hp) || !Number.isFinite(maxHp) || maxHp <= 0) {
       return { state: "Healthy", icon: "❤️" };
