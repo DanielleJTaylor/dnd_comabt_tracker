@@ -294,3 +294,34 @@ body {
 
 /* Optional helper for title/body pattern */
 .block .title{ font-weight: 800; }
+
+
+
+
+
+/* Toolbar look (reuse your existing .format-toolbar styles if present) */
+#formatBar button, #formatBar select {
+  border: 1px solid #cbb796;
+  background: #fff6e5;
+  color: #333;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+#formatBar button:hover { background: #ffeecd; }
+
+/* Inline code inside contenteditable */
+.block .block-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: rgba(0,0,0,.08);
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 4px;
+  padding: .05rem .3rem;
+}
+
+/* Optional: tidy checkboxes */
+.block .block-content .cb {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+}

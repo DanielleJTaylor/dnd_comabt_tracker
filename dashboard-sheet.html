@@ -25,26 +25,51 @@
             </div>
         </header>
 
-        <div id="format-toolbar" class="format-toolbar">
-            <!-- Toolbar buttons remain the same -->
-            <button data-command="bold" title="Bold"><b>B</b></button>
-            <button data-command="italic" title="Italic"><i>I</i></button>
-            <button data-command="underline" title="Underline"><u>U</u></button>
-            <button data-command="strikeThrough" title="Strikethrough"><s>S</s></button>
-            <select data-command="formatBlock">
-                <option value="p">Paragraph</option>
-                <option value="h2">Heading 2</option>
-                <option value="h3">Heading 3</option>
-            </select>
-            <button data-command="justifyLeft" title="Align Left">AlignL</button>
-            <button data-command="justifyCenter" title="Align Center">AlignC</button>
-            <button data-command="justifyRight" title="Align Right">AlignR</button>
-            <button data-command="insertUnorderedList" title="Bulleted List">List</button>
+        
+        <!-- Formatting toolbar -->
+        <div class="format-toolbar" id="formatBar">
+
+        <!-- Inline styles -->
+        <button type="button" data-cmd="bold" title="Bold"><b>B</b></button>
+        <button type="button" data-cmd="italic" title="Italic"><i>I</i></button>
+        <button type="button" data-cmd="underline" title="Underline"><u>U</u></button>
+
+        <!-- Block format -->
+        <select id="formatBlockSelect" title="Heading / Paragraph / Quote">
+            <option value="p">Paragraph</option>
+            <option value="blockquote">Quote</option>
+            <option value="h1">Heading 1</option>
+            <option value="h2" selected>Heading 2</option>
+            <option value="h3">Heading 3</option>
+            <option value="h4">Heading 4</option>
+            <option value="h5">Heading 5</option>
+            <option value="h6">Heading 6</option>
+        </select>
+
+
+        <!-- Lists -->
+        <button type="button" data-cmd="insertUnorderedList" title="Bullet list">• List</button>
+        <button type="button" data-cmd="insertOrderedList" title="Numbered list">1. List</button>
+
+        <!-- Inline code -->
+        <button type="button" id="btnInlineCode" title="Inline code">{ }</button>
+
+        <!-- Alignment -->
+        <button type="button" data-cmd="justifyLeft"   title="Align left">⟸</button>
+        <button type="button" data-cmd="justifyCenter" title="Align center">⟺</button>
+        <button type="button" data-cmd="justifyRight"  title="Align right">⟹</button>
+
+        <!-- Checkbox + Link -->
+        <button type="button" id="btnCheckbox" title="Insert checkbox">☑</button>
+        <button type="button" id="btnCreateLink" title="Create link">🔗</button>
         </div>
+
 
         <main id="blocks-container" class="grid-container"></main>
         
         <button id="add-block-btn" class="btn">+</button>
     </div>
+<!-- At the end of dashboard-sheet.html, before </body> -->
+<script src="scripts/formatting-toolbar.js" defer></script>
 </body>
 </html>
