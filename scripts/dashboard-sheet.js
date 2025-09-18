@@ -252,24 +252,36 @@ document.addEventListener('DOMContentLoaded', () => {
   function clearPreviewTransforms() {
     blocksContainer.querySelectorAll('.block').forEach(el => { el.style.transform = ''; });
   }
-  function applyPreview(ghostRect, activeEl) {
-    const tempAnchor = { ...ghostRect, el: activeEl };
-    const cascaded   = pushDownCascadeFull(tempAnchor);
-    const packed     = gravityUpRects(cascaded, activeEl);
-    const compacted  = compactEmptyRows(packed); // cut empty rows
 
-    const byEl = new Map(compacted.map(r => [r.el, r]));
+  // Live preview that treats the source as empty (so neighbors can climb up)
+  function applyPreview(ghostRect, activeEl) {
+    // Build a temp layout: all rects except the active one
+    const others = getAllRects(activeEl);
+
+    // Add the active block at its ghost position
+    const tempAnchor = { ...ghostRect, el: activeEl };
+    const base = [...others, tempAnchor];
+
+    // Run the same pipeline you use on commit
+    const cascaded  = pushDownCascadeFull(tempAnchor);      // pushes only where columns overlap
+    const packed    = gravityUpRects(cascaded, activeEl);   // closes vertical gaps (active won’t jump above its start)
+    // If you’ve added compactEmptyRows, include it here:
+    // const compacted = compactEmptyRows(packed);
+
+    const nextByEl = new Map(packed.map(r => [r.el, r]));
     const m = getMetrics();
 
+    // Animate neighbors to their preview rows
     for (const el of blocksContainer.querySelectorAll('.block')) {
       if (el === activeEl) { el.style.transform = ''; continue; }
-      const real = readRect(el);
-      const nxt  = byEl.get(el);
+      const cur = readRect(el);
+      const nxt = nextByEl.get(el);
       if (!nxt) { el.style.transform = ''; continue; }
-      const dy = (nxt.rowStart - real.rowStart) * (m.rowUnit + m.gap);
+      const dy = (nxt.rowStart - cur.rowStart) * (m.rowUnit + m.gap);
       el.style.transform = dy ? `translateY(${dy}px)` : '';
     }
   }
+
 
   // ---------- Image blocks ----------
   function fileToDataUrl(file) {
