@@ -232,6 +232,27 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ----- Ensure delete button is in the top-right -----------------------------
+  function styleDeleteButton(blockEl) {
+    const btn = blockEl.querySelector('.delete-btn');
+    if (!btn) return;
+    Object.assign(btn.style, {
+      position: 'absolute',
+      top: '6px',
+      right: '6px',
+      width: '24px',
+      height: '24px',
+      lineHeight: '22px',
+      border: 'none',
+      borderRadius: '8px',
+      background: 'rgba(0,0,0,.12)',
+      color: '#222',
+      cursor: 'pointer',
+      zIndex: 6
+    });
+    if (!btn.textContent.trim()) btn.textContent = '×';
+  }
+
   // ---------- Live preview ----------
   function updateGhost(rect) {
     if (!ghostEl) {
@@ -255,23 +276,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Live preview that treats the source as empty (so neighbors can climb up)
   function applyPreview(ghostRect, activeEl) {
-    // Build a temp layout: all rects except the active one
-    const others = getAllRects(activeEl);
-
-    // Add the active block at its ghost position
     const tempAnchor = { ...ghostRect, el: activeEl };
-    const base = [...others, tempAnchor];
-
-    // Run the same pipeline you use on commit
-    const cascaded  = pushDownCascadeFull(tempAnchor);      // pushes only where columns overlap
-    const packed    = gravityUpRects(cascaded, activeEl);   // closes vertical gaps (active won’t jump above its start)
-    // If you’ve added compactEmptyRows, include it here:
-    // const compacted = compactEmptyRows(packed);
+    const cascaded  = pushDownCascadeFull(tempAnchor);
+    const packed    = gravityUpRects(cascaded, activeEl);
+    // Optionally: const compacted = compactEmptyRows(packed);
 
     const nextByEl = new Map(packed.map(r => [r.el, r]));
     const m = getMetrics();
 
-    // Animate neighbors to their preview rows
     for (const el of blocksContainer.querySelectorAll('.block')) {
       if (el === activeEl) { el.style.transform = ''; continue; }
       const cur = readRect(el);
@@ -281,7 +293,6 @@ document.addEventListener('DOMContentLoaded', () => {
       el.style.transform = dy ? `translateY(${dy}px)` : '';
     }
   }
-
 
   // ---------- Image blocks ----------
   function fileToDataUrl(file) {
@@ -553,6 +564,7 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     writeRect(block, rect);
     blocksContainer.appendChild(block);
+    styleDeleteButton(block);                 // ensure top-right
     bindBlockEvents(block);
     block.querySelector('.block-content').focus();
 
@@ -580,6 +592,7 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     writeRect(el, { colStart: b.colStart, rowStart: b.rowStart, colSpan: b.colSpan, rowSpan: b.rowSpan });
     blocksContainer.appendChild(el);
+    styleDeleteButton(el);                   // ensure top-right
 
     if (b.type === 'image') {
       makeImageBlock(el, b.src || '');
@@ -627,7 +640,7 @@ document.addEventListener('DOMContentLoaded', () => {
         .draggable({
           hold: 220,              // long-press to start
           allowFrom: el,          // anywhere on block
-          ignoreFrom: 'button,.resize-handle',
+          ignoreFrom: 'button,.resize-handle,.delete-btn',
           listeners: {
             start: e => {
               beginInteractionSelectionGuard();
