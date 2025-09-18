@@ -23,7 +23,9 @@
   let _nextColorIdx = 0;
 
   // ====== DOM ======
+  // ====== DOM ======
   const $ = (s) => document.querySelector(s);
+
   const combatantListBody     = $('#combatant-list-body');
   const lockGroupSelectionBtn = $('#lockGroupSelectionBtn');
   const trackerTable          = $('#tracker-table');
@@ -37,6 +39,27 @@
 
   const roundCounterEl  = $('#roundCounter');
   const currentTurnEl   = $('#currentTurnDisplay');
+
+  // See Dead toggle (supports either id just in case)
+  const seeDeadToggle = document.querySelector('#toggleSeeDead, #toggle-show-dead');
+  let showDead = !!(seeDeadToggle && seeDeadToggle.checked);
+  seeDeadToggle?.addEventListener('change', (e) => {
+    showDead = !!e.target.checked;
+    notify(); // re-render rows hidden/visible without changing data
+  });
+
+  // Optional bulk resurrect button (only if you add one)
+  const bulkResurrectBtn = document.querySelector('#bulk-resurrect-dead');
+  bulkResurrectBtn?.addEventListener('click', () => {
+    forEachItem(it => {
+      if (it.type === 'combatant' && (Number(it.hp) || 0) <= 0) {
+        it._out = false;
+        if (!Number(it.hp) || it.hp <= 0) it.hp = 1;
+      }
+    });
+    notify();
+  });
+
 
   // ====== HELPERS ======
   const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -130,8 +153,17 @@
       if (item.type === 'combatant') ids.push(item.id);
       else if (item.type === 'group') (item.members || []).forEach(m => ids.push(m.id));
     });
-    return ids;
+
+    // NEW: exclude dead/_out from initiative
+    return ids.filter(id => {
+      const { item } = findEntity(id);
+      if (!item || item.type !== 'combatant') return false;
+      const hp = Number(item.hp) || 0;
+      return !item._out && hp > 0;
+    });
   }
+
+
   function clampTurnPtr() {
     const order = getTurnOrderIds();
     if (order.length === 0) { turnPtr = 0; return; }
@@ -258,16 +290,31 @@
     notify();
     return group;
   }
+
   function updateCombatant(id, patch) {
     const { item } = findEntity(id);
     if (!item || item.type !== 'combatant') return false;
+
     if ('name' in patch) {
       const proposed = String(patch.name || '').trim();
       if (!proposed) return false;
       if (isNameTaken(proposed, id)) return false;
     }
-    Object.assign(item, patch); notify(); return true;
+
+    // NEW: if HP is being edited directly, keep _out synced
+    if ('hp' in patch) {
+      const nextHp = Number(patch.hp);
+      if (Number.isFinite(nextHp)) {
+        patch._out = (nextHp <= 0);
+      }
+    }
+
+    Object.assign(item, patch);
+    notify(); 
+    return true;
   }
+
+  
   function updateGroup(id, patch) {
     const { item } = findEntity(id);
     if (!item || item.type !== 'group') return false;
@@ -366,6 +413,7 @@
   }
 
   // ====== HP (Damage/Heal) ======
+  // ====== HP (Damage/Heal) ======
   function applyDamageHeal(ids, { damage = 0, heal = 0 } = {}) {
     const deltaD = Number(damage) || 0;
     const deltaH = Number(heal) || 0;
@@ -387,11 +435,18 @@
       if (deltaH > 0) {
         hp = Math.min(maxHp, hp + deltaH);
       }
+
       item.hp = hp;
       item.tempHp = temp;
+
+      // NEW: mark out of initiative when dead; clear when above 0
+      item._out = (hp <= 0);
     });
-    notify(); return true;
+
+    notify(); 
+    return true;
   }
+
 
   // ====== NOTIFY / SNAPSHOT ======
   const listeners = new Set();
@@ -884,18 +939,35 @@
       return;
     }
 
+
     // spell slots button (toggle inline panel)
     const spellBtn = e.target.closest('.btn-spellcaster');
     if (spellBtn) {
       const id = spellBtn.dataset.id;
       const { item } = findEntity(id);
       if (item && item.type === 'combatant') {
-        ensureSpellData(item);               // first time -> makes them a spellcaster
-        item._slotsOpen = !item._slotsOpen;  // remember open state
-        notify();                            // re-render row (panel appears below)
+        ensureSpellData(item);
+        item._slotsOpen = !item._slotsOpen;
+        notify();
       }
       return;
     }
+
+    // ⬇⬇ INSERT THIS BLOCK HERE ⬇⬇
+    // rejoin initiative (resurrection) button
+    const rejoin = e.target.closest('.btn.btn-rejoin, .btn-rejoin');
+    if (rejoin) {
+      const id = rejoin.dataset.id;
+      const { item } = findEntity(id);
+      if (item && item.type === 'combatant') {
+        item._out = false;
+        if (!Number(item.hp) || item.hp <= 0) item.hp = 1; // default 1 HP restore
+        notify();
+      }
+      return;
+    }
+    // ⬆⬆ INSERT END ⬆⬆
+
 
     // image picker
     const img = e.target.closest('.editable-img');
@@ -1164,18 +1236,19 @@
 
     // Combatant row
     const paintCombatant = (c, inGroup = false, scheme = null) => {
+      const hpNum = Number(c.hp) || 0;
+
+      // NEW: hide dead rows only in UI when toggle is OFF (keeps order intact)
+      if (!showDead && hpNum <= 0) return;
+
       const isSelected = selectedCombatantIds.has(c.id);
-      const isCurrent  = curId === c.id;
+      const isCurrent  = (getTurnOrderIds()[turnPtr] || null) === c.id;
 
       const row = document.createElement('div');
       row.className = `tracker-table-row ${inGroup ? 'in-group' : ''} ${isSelected ? 'selected' : ''} ${isCurrent ? 'current-turn' : ''}`;
       row.dataset.id = c.id;
       row.dataset.type = 'combatant';
-
-      if (inGroup && scheme) {
-        row.style.backgroundColor = scheme.member;
-        row.style.color = scheme.text;
-      }
+      if (inGroup && scheme) { row.style.backgroundColor = scheme.member; row.style.color = scheme.text; }
 
       const { html: hpIconHtml } = hpStateAsset(Number(c.hp), Number(c.maxHp));
 
@@ -1216,24 +1289,22 @@
             <button class="btn btn-spellcaster" data-id="${c.id}" title="Spell slots">
               ${c.spellSlots ? '🪄 Slots' : '🪄 Make Caster'}
             </button>
+            ${
+              hpNum <= 0
+                ? `<button class="btn btn-rejoin" data-id="${c.id}" title="Bring back into initiative">☠️↩</button>`
+                : ''
+            }
             <button class="row-del" data-type="combatant" data-id="${c.id}" title="Delete combatant">🗑️</button>
           </div>
         </div>
         <div class="cell dashboard-link-cell"><button title="Toggle Dashboard">📄</button></div>
       `;
-      // Inline slots panel (if open)
-      if (c._slotsOpen) {
-        const panel = document.createElement('div');
-        panel.className = 'slots-inline';
-        panel.dataset.id = c.id;
-        panel.style.gridColumn = '1 / -1';
-        panel.style.display = 'block';
-        panel.innerHTML = buildSlotsInlineHTML(c);
-        row.appendChild(panel);
-      }
 
+      // (keep your slots-inline block as-is)
+      // ...
       combatantListBody.appendChild(row);
     };
+
 
     // Paint everything
     combatants.forEach(item => {

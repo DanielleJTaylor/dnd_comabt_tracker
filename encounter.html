@@ -22,11 +22,9 @@
     <script src="scripts/conditions_catalog.js" defer></script>
 
     <!-- The split files -->
-
     <script src="scripts/combat-tracker.js" defer></script>
     <script src="scripts/combat-persist.js" defer></script>
     <script src="scripts/combat-share.js" defer></script>
-
 
     <script src="scripts/group-selector.js" defer></script>
     <script src="scripts/hp-popup.js" defer></script>
@@ -42,23 +40,22 @@
         <!-- RIGHT: Dashboards panel (Initially hidden) -->
         <!-- RIGHT: Dashboards panel (resizable, opens on button) -->
         <section id="right-dashboard">
-        <div id="dash-resizer" aria-label="Resize dashboards panel" title="Drag to resize"></div>
+            <div id="dash-resizer" aria-label="Resize dashboards panel" title="Drag to resize"></div>
 
-        <div id="dashboard-header">
-            <h3>📁 Dashboards</h3>
-            <button id="closeDashboardBtn">✖</button>
-        </div>
+            <div id="dashboard-header">
+                <h3>📁 Dashboards</h3>
+                <button id="closeDashboardBtn">✖</button>
+            </div>
 
-        <!-- New: the embedded dashboards frame -->
-        <iframe
-            id="dash-iframe"
-            title="Dashboards"
-            sandbox="allow-same-origin allow-scripts allow-forms allow-downloads"
-            referrerpolicy="no-referrer"
-            style="border:0; width:100%; height:100%; display:block;"
-        ></iframe>
+            <!-- New: the embedded dashboards frame -->
+            <iframe
+                id="dash-iframe"
+                title="Dashboards"
+                sandbox="allow-same-origin allow-scripts allow-forms allow-downloads"
+                referrerpolicy="no-referrer"
+                style="border:0; width:100%; height:100%; display:block;"
+            ></iframe>
         </section>
-
 
         <!-- LEFT: Main Tracker panel -->
         <section id="left-tracker">
@@ -67,7 +64,6 @@
                 <div class="header-left-group">
                     <button id="encounterBackBtn" class="back-btn">⬅ Back</button>
                     <h1>🧝‍♂️ D&D Combat Tracker</h1>
-                   
                 </div>
                 <div class="header-right-controls">
                     <label class="theme-switch">
@@ -87,11 +83,20 @@
                     <button id="lockGroupSelectionBtn" class="btn">🔒 <span class="label">Lock Groups</span></button>
                     <button class="btn">🗑️ <span class="label">Clear</span></button>
                     <button id="historyLogBtn" class="btn">📜 <span class="label">History</span></button>
+
                     <span id="roundCounter">Round: 1</span>
+
                     <button id="prevTurnBtn" class="btn">⬅ <span class="label">Prev Turn</span></button>
                     <div id="currentTurnDisplay">🟢 Current Turn: <strong>None</strong></div>
                     <button id="nextTurnBtn" class="btn">➡ <span class="label">Next Turn</span></button>
-                    <!-- in encounter.html, controls-row -->
+
+                    <!-- NEW: See Dead toggle -->
+                    <label class="btn" style="display:inline-flex; align-items:center; gap:.4rem;">
+                        <input type="checkbox" id="toggleSeeDead" />
+                        <span class="label">☠️ See Dead</span>
+                    </label>
+
+                    <!-- Save/Load/Export/Dashboards -->
                     <button id="saveEncounterBtn" class="btn">💾 <span class="label">Save</span></button>
                     <button id="loadEncounterBtn" class="btn">📂 <span class="label">Load</span></button>
                     <button id="exportInitBtn" class="btn">🧾 <span class="label">Copy</span></button>
@@ -109,7 +114,7 @@
                 
                 <!-- Hint shown after pressing “Move to Group” -->
                 <div id="choose-group-hint" class="hint-banner hidden">
-                👉 Please choose a group (click a group row) to move the selected combatants.
+                    👉 Please choose a group (click a group row) to move the selected combatants.
                 </div>
 
                 <!-- Mini confirm bar (appears after clicking a group row) -->
@@ -120,8 +125,6 @@
                         <button id="confirm-mini-no"  class="btn btn-secondary">Cancel</button>
                     </div>
                 </div>
-
-
 
                 <div class="table-scroll-container">
                     <div id="tracker-table" class="tracker-table">
@@ -153,10 +156,6 @@
     <section id="trackerContainer" class="tracker-log-panel"> 
         <div id="historyLogContent" class="log-content"></div> 
     </section>
-    
-
-
-
 
     <!-- Modal for Linking a Dashboard -->
     <div id="link-dashboard-modal" class="modal-overlay hidden">
@@ -169,18 +168,18 @@
         <div class="modal-content">
             <h3>Move to Group</h3>
             <div class="form-group">
-            <label for="group-select">Select a group to move combatant(s) to:</label>
-            <select id="group-select"></select>
+                <label for="group-select">Select a group to move combatant(s) to:</label>
+                <select id="group-select"></select>
             </div>
             <div class="modal-actions">
-            <button id="cancel-move-btn" class="btn">Cancel</button>
-            <button id="confirm-move-btn" class="btn">Confirm</button>
+                <button id="cancel-move-btn" class="btn">Cancel</button>
+                <button id="confirm-move-btn" class="btn">Confirm</button>
             </div>
         </div>
     </div>
 
-<!-- in encounter.html, near the end of body -->
-<div id="drag-shield" aria-hidden="true"></div>
+    <!-- in encounter.html, near the end of body -->
+    <div id="drag-shield" aria-hidden="true"></div>
 
 </body>
 </html>
