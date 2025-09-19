@@ -202,7 +202,7 @@ body {
 
 /* Ghost block used during drag/resize previews */
 .block-ghost {
-  background: repeating-linear-gradient(45deg, #e8e8e8, #e8e8e8 8px, #f7f7f7 8px, #f7f7f7 16px);
+  background: repeating-linear-gradient(45deg, #b9ee8e, #91dc8f 8px, #b9ee8e 8px, #91dc8f 16px);
   border: 1px dashed #bbb;
   border-radius: 10px;
 }
@@ -343,15 +343,14 @@ body {
 
 
 
-/* Active visuals */
+/* Make the real block see-through during drag/resize so the ghost is visible */
 .block.dragging-active,
 .block.resizing-active {
-  z-index: 60;
-  box-shadow: 0 12px 30px rgba(0,0,0,.18);
+  opacity: 1;         /* tweak to taste: 0.45–0.7 is a good range */
+  transition: opacity .05s ease;
 }
 
-/* Make sure the preview never eats events */
+/* Keep the ghost fully readable */
 .block-ghost {
-  pointer-events: none;
-  z-index: 50;
+  opacity: 0.35;
 }

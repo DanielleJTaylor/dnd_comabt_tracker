@@ -277,24 +277,70 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Live preview that treats the source as empty (so neighbors can climb up)
+  // Live preview that treats the source as empty (so neighbors can climb up)
   function applyPreview(ghostRect, activeEl) {
-    const tempAnchor = { ...ghostRect, el: activeEl };
-    const cascaded  = pushDownCascadeFull(tempAnchor);
-    const packed    = gravityUpRects(cascaded, activeEl);
-    // Optionally: const compacted = compactEmptyRows(packed);
+    // 0) We need the original rect to know which way we're moving
+    const startRect = JSON.parse(activeEl.getAttribute('data-start-rect') || '{}');
 
-    const nextByEl = new Map(packed.map(r => [r.el, r]));
+    // 1) Build the fully packed preview
+    const tempAnchor = { ...ghostRect, el: activeEl };
+    const cascaded = pushDownCascadeFull(tempAnchor);
+    const packed   = gravityUpRects(cascaded, activeEl);
+    const final    = compactEmptyRows(packed);
+
+    const nextByEl = new Map(final.map(r => [r.el, r]));
     const m = getMetrics();
 
+    // Movement direction (signs: -1, 0, +1)
+    const vdir = Math.sign((ghostRect?.rowStart || 0) - (startRect?.rowStart || 0));
+    const hdir = Math.sign((ghostRect?.colStart || 0) - (startRect?.colStart || 0));
+
+    // Ghost edges
+    const ghostTop    = ghostRect.rowStart;
+    const ghostBottom = ghostRect.rowStart + ghostRect.rowSpan - 1;
+    const ghostLeft   = ghostRect.colStart;
+    const ghostRight  = ghostRect.colStart + ghostRect.colSpan - 1;
+
     for (const el of blocksContainer.querySelectorAll('.block')) {
-      if (el === activeEl) { el.style.transform = ''; continue; }
+      if (el === activeEl) continue; // active is moved by drag/resize handlers
+
       const cur = readRect(el);
       const nxt = nextByEl.get(el);
       if (!nxt) { el.style.transform = ''; continue; }
+
+      // Neighbor edges (current)
+      const nbTop    = cur.rowStart;
+      const nbBottom = cur.rowStart + cur.rowSpan - 1;
+      const nbLeft   = cur.colStart;
+      const nbRight  = cur.colStart + cur.colSpan - 1;
+
+      // Has the ghost "cleared" this neighbor along the axis we’re moving?
+      let cleared = true;
+
+      if (vdir > 0) {            // moving DOWN → clear when ghost top passed neighbor bottom
+        cleared = cleared && (ghostTop > nbBottom);
+      } else if (vdir < 0) {     // moving UP → clear when ghost bottom above neighbor top
+        cleared = cleared && (ghostBottom < nbTop);
+      }
+
+      if (hdir > 0) {            // moving RIGHT → clear when ghost left passed neighbor right
+        cleared = cleared && (ghostLeft > nbRight);
+      } else if (hdir < 0) {     // moving LEFT → clear when ghost right before neighbor left
+        cleared = cleared && (ghostRight < nbLeft);
+      }
+
+      if (!cleared) {
+        // Not cleared yet → keep the neighbor where it is (no preview transform)
+        el.style.transform = '';
+        continue;
+      }
+
+      // Cleared → show where it will go in the packed preview
       const dy = (nxt.rowStart - cur.rowStart) * (m.rowUnit + m.gap);
       el.style.transform = dy ? `translateY(${dy}px)` : '';
     }
   }
+
 
   // ---------- Image blocks ----------
   function fileToDataUrl(file) {
@@ -645,12 +691,14 @@ document.addEventListener('DOMContentLoaded', () => {
           allowFrom: el,
           ignoreFrom: 'button,.resize-handle,.delete-btn',
           listeners: {
+            // DRAG start
             start: e => {
               beginInteractionSelectionGuard();
               disableEditing(e.target);
               e.target.classList.add('dragging-active');
+              e.target.style.zIndex = '60';             // raise above neighbors/ghost
               e.target.setAttribute('data-start-rect', JSON.stringify(readRect(e.target)));
-              updateGhost(readRect(e.target));       // show starting ghost
+              updateGhost(readRect(e.target));
             },
             move: dragMove,
             end: e => {
@@ -664,12 +712,14 @@ document.addEventListener('DOMContentLoaded', () => {
         .resizable({
           edges: { top: false, left: false, right: true, bottom: true, bottomRight: true },
           listeners: {
+            // RESIZE start
             start: e => {
               beginInteractionSelectionGuard();
               disableEditing(e.target);
               e.target.classList.add('resizing-active');
+              e.target.style.zIndex = '60';
               e.target.setAttribute('data-start-rect', JSON.stringify(readRect(e.target)));
-              updateGhost(readRect(e.target));       // show starting ghost
+              updateGhost(readRect(e.target));
             },
             move: resizeMove,
             end: e => {
@@ -747,16 +797,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- drag/resize listeners ---
   // --- DRAG / RESIZE LISTENERS ---
+  // --- drag/resize preview with ghost-driven pushdown and active-block follow ---
+
+  let _rafToken = null;
+  function withRaf(fn) {
+    if (_rafToken) return;
+    _rafToken = requestAnimationFrame(() => {
+      _rafToken = null;
+      fn();
+    });
+  }
 
   function dragMove(e) {
-    // 1) Make the real element follow the pointer (free movement)
-    const dx = e.pageX - e.x0;
-    const dy = e.pageY - e.y0;
-    e.target.style.transform = `translate(${dx}px, ${dy}px)`;
-
-    // 2) Compute the snapped grid target for the ghost
     const m = getMetrics();
     const start = JSON.parse(e.target.getAttribute('data-start-rect'));
+
+    const dx = e.pageX - e.x0;
+    const dy = e.pageY - e.y0;
+
     const colShift = Math.round(dx / (m.cellW + m.gap));
     const rowShift = Math.round(dy / (m.rowUnit + m.gap));
 
@@ -766,40 +824,50 @@ document.addEventListener('DOMContentLoaded', () => {
       rowStart: Math.max(1, start.rowStart + rowShift)
     };
 
-    updateGhost(ghost);
+    withRaf(() => {
+      // 1) Draw/position ghost
+      updateGhost(ghost);
+
+      // 2) Preview pushdown *around the ghost rect*
+      applyPreview(ghost, e.target);
+
+      // 3) Move the actual block to where the ghost is (visual follow)
+      const cur = readRect(e.target);
+      const tx = (ghost.colStart - cur.colStart) * (m.cellW + m.gap);
+      const ty = (ghost.rowStart - cur.rowStart) * (m.rowUnit + m.gap);
+      e.target.style.transform = `translate(${tx}px, ${ty}px)`;
+    });
   }
 
+
   function dragEnd(e) {
-    // Clear the visual translate on the block itself
-    e.target.style.transform = '';
-    e.target.classList.remove('dragging-active');
+    e.target.classList.remove('dragging', 'dragging-active');
     restoreEditing(e.target);
 
-    // Commit to the ghost's snapped rect
     const final = ghostEl ? readRect(ghostEl) : null;
     removeGhost();
+    clearPreviewTransforms();
+    e.target.style.transform = '';
+    e.target.removeAttribute('data-start-rect');
 
-    // Safety: if for some reason we didn't compute a ghost, bail
+    // ⬇️ Put the reset here
+    e.target.style.zIndex = '';
+
     if (!final) return;
 
-    // Write the final rect to the dragged element and then reflow others
     const anchor = { ...final, el: e.target };
-
-    // same cascade -> gravity -> compact you already use
     const layout = compactEmptyRows(
-      gravityUpRects(
-        pushDownCascadeFull(anchor),
-        e.target
-      )
-    );
-
+                    gravityUpRects(
+                      pushDownCascadeFull(anchor),
+                      e.target
+                    )
+                  );
     writeRectsToDOM(layout);
     requestSave();
   }
+  
 
   function resizeMove(e) {
-    // Leave the real element in place during resize;
-    // only show the snapped final size with the ghost
     const m = getMetrics();
     const start = JSON.parse(e.target.getAttribute('data-start-rect'));
     const ghost = { ...start };
@@ -807,33 +875,55 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.edges.right)  ghost.colSpan = Math.max(1, Math.round(e.rect.width  / (m.cellW + m.gap)));
     if (e.edges.bottom) ghost.rowSpan = Math.max(1, Math.round(e.rect.height / (m.rowUnit + m.gap)));
 
-    // clamp to grid
+    // Clamp span to grid width
     if (ghost.colStart + ghost.colSpan - 1 > m.cols) {
       ghost.colSpan = m.cols - ghost.colStart + 1;
     }
 
-    updateGhost(ghost);
+    withRaf(() => {
+      // 1) Draw ghost with new size
+      updateGhost(ghost);
+
+      // 2) Preview pushdown around the *resized* ghost
+      applyPreview(ghost, e.target);
+
+      // 3) Move/scale the active block visually to match the ghost footprint
+      const cur = readRect(e.target);
+      const tx = (ghost.colStart - cur.colStart) * (m.cellW + m.gap);
+      const ty = (ghost.rowStart - cur.rowStart) * (m.rowUnit + m.gap);
+      e.target.style.transform = `translate(${tx}px, ${ty}px)`;
+      // We don't try to scale the grid cell; transform is enough for preview.
+    });
   }
 
+
   function resizeEnd(e) {
-    e.target.classList.remove('resizing-active');
+    e.target.classList.remove('resizing', 'resizing-active');
     restoreEditing(e.target);
 
     const final = ghostEl ? readRect(ghostEl) : null;
     removeGhost();
+    clearPreviewTransforms();
+    e.target.style.transform = '';
+    e.target.removeAttribute('data-start-rect');
+
+    // ⬇️ Put the reset here
+    e.target.style.zIndex = '';
+
     if (!final) return;
 
     const anchor = { ...final, el: e.target };
     const layout = compactEmptyRows(
-      gravityUpRects(
-        pushDownCascadeFull(anchor),
-        e.target
-      )
-    );
-
+                    gravityUpRects(
+                      pushDownCascadeFull(anchor),
+                      e.target
+                    )
+                  );
     writeRectsToDOM(layout);
     requestSave();
   }
+
+
 
 
   // ---------- Lock/UI ----------
