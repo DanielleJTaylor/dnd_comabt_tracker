@@ -23,7 +23,6 @@
   let _nextColorIdx = 0;
 
   // ====== DOM ======
-  // ====== DOM ======
   const $ = (s) => document.querySelector(s);
 
   const combatantListBody     = $('#combatant-list-body');
@@ -59,7 +58,6 @@
     });
     notify();
   });
-
 
   // ====== HELPERS ======
   const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -162,7 +160,6 @@
       return !item._out && hp > 0;
     });
   }
-
 
   function clampTurnPtr() {
     const order = getTurnOrderIds();
@@ -310,11 +307,10 @@
     }
 
     Object.assign(item, patch);
-    notify(); 
+    notify();
     return true;
   }
 
-  
   function updateGroup(id, patch) {
     const { item } = findEntity(id);
     if (!item || item.type !== 'group') return false;
@@ -413,7 +409,6 @@
   }
 
   // ====== HP (Damage/Heal) ======
-  // ====== HP (Damage/Heal) ======
   function applyDamageHeal(ids, { damage = 0, heal = 0 } = {}) {
     const deltaD = Number(damage) || 0;
     const deltaH = Number(heal) || 0;
@@ -443,10 +438,9 @@
       item._out = (hp <= 0);
     });
 
-    notify(); 
+    notify();
     return true;
   }
-
 
   // ====== NOTIFY / SNAPSHOT ======
   const listeners = new Set();
@@ -643,56 +637,12 @@
   });
 
   // ====== SPELL SLOTS (inline panel under the row) ======
-  function ensureSpellData(c) {
+  function ensureSpellData(c){
     if (!c.spellSlots) {
       c.spellSlots = { isSpellcaster: true, slots: {} };
       for (let L = 1; L <= 9; L++) c.spellSlots.slots[L] = { max: 0, used: 0 };
     }
     return c.spellSlots;
-  }
-
-  function renderSlotsRows(c) {
-    const sd = ensureSpellData(c);
-    const rows = [];
-    for (let L = 1; L <= 9; L++) {
-      const { max, used } = sd.slots[L];
-      const left = Math.max(0, max - used);
-      rows.push(`
-        <div class="slot-row" data-level="${L}" style="display:flex;align-items:center;gap:.5rem;">
-          <div style="width:2.2rem;font-weight:700;">L${L}</div>
-          <button class="slot-dec" data-level="${L}" title="Spend one">−</button>
-          <span class="slot-count" data-level="${L}" style="min-width:60px;text-align:center;">${used}/${max}</span>
-          <button class="slot-inc" data-level="${L}" title="Recover one">+</button>
-
-          <div class="slot-pips" data-level="${L}" aria-label="${left} available, ${used} spent" style="flex:1;">
-            ${renderPips(sd, L)}
-          </div>
-
-          <div style="margin-left:.5rem;">Max</div>
-          <input class="slot-max" data-level="${L}" type="number" min="0" step="1" value="${max}" style="width:64px;padding:.25rem .4rem;">
-        </div>
-      `);
-    }
-    return rows.join('');
-  }
-
-
-  function buildSlotsInlineHTML(c) {
-    ensureSlotsStyles();  // <-- make sure pip styles exist
-    return `
-      <div class="slots-inline-inner" style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:8px;margin-top:6px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
-          <div style="font-weight:700;">🪄 Spell Slots — ${escapeHTML(c.name || 'Combatant')}</div>
-          <div style="display:flex;gap:.5rem;">
-            <button class="slots-longrest" title="Set used to 0 for all levels">Long Rest</button>
-            <button class="slots-close">Close</button>
-          </div>
-        </div>
-        <div class="slots-body" style="display:flex;flex-direction:column;gap:.35rem;">
-          ${renderSlotsRows(c)}
-        </div>
-      </div>
-    `;
   }
 
   // Inject minimal CSS once for the pips UI
@@ -711,16 +661,50 @@
     document.head.appendChild(el);
   }
 
-  // Build the pip dots for a given level
-  function renderPips(sd, level){
-    const { max, used } = sd.slots[level];
+  function renderPips(sd, L){
+    const { max, used } = sd.slots[L];
     const left = Math.max(0, max - used);
-    const parts = [];
-    for (let i = 0; i < left; i++) parts.push('<span class="slot-pip available" title="Available"></span>');
-    for (let i = 0; i < used; i++) parts.push('<span class="slot-pip spent" title="Spent"></span>');
-    return parts.join('');
+    const dots = [];
+    for (let i = 0; i < left; i++) dots.push('<span class="slot-pip available" title="Available"></span>');
+    for (let i = 0; i < used; i++) dots.push('<span class="slot-pip spent" title="Spent"></span>');
+    return dots.join('');
   }
 
+  function renderSlotsRows(c){
+    const sd = ensureSpellData(c);
+    const rows = [];
+    for (let L=1; L<=9; L++){
+      const { max, used } = sd.slots[L];
+      rows.push(`
+        <div class="slot-row" data-level="${L}" style="display:flex;align-items:center;gap:.5rem;">
+          <div style="width:2.2rem;font-weight:700;">L${L}</div>
+          <button class="slot-dec" data-level="${L}" title="Spend one">−</button>
+          <span class="slot-count" data-level="${L}" style="min-width:60px;text-align:center;">${used}/${max}</span>
+          <button class="slot-inc" data-level="${L}" title="Recover one">+</button>
+          <div class="slot-pips" data-level="${L}" aria-label="" style="flex:1;">${renderPips(sd, L)}</div>
+          <div style="margin-left:.5rem;">Max</div>
+          <input class="slot-max" data-level="${L}" type="number" min="0" step="1" value="${max}" style="width:64px;padding:.25rem .4rem;">
+        </div>`);
+    }
+    return rows.join('');
+  }
+
+  function buildSlotsInlineHTML(c){
+    ensureSlotsStyles();
+    return `
+    <div class="slots-inline-inner" style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:8px;margin-top:6px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
+        <div style="font-weight:700;">🪄 Spell Slots — ${escapeHTML(c.name||'')}</div>
+        <div style="display:flex;gap:.5rem;">
+          <button class="slots-longrest">Long Rest</button>
+          <button class="slots-close">Close</button>
+        </div>
+      </div>
+      <div class="slots-body" style="display:flex;flex-direction:column;gap:.35rem;">
+        ${renderSlotsRows(c)}
+      </div>
+    </div>`;
+  }
 
   // ====== STATUS-CELL LAYOUT (1-line until 3+ chips need wrapping) ======
   function updateStatusCellLayout() {
@@ -887,6 +871,14 @@
     notify();
   });
 
+  // Kill any legacy '.btn-spellcaster' handlers injected elsewhere
+  document.addEventListener('click', (ev) => {
+    if (ev.target.closest('.btn-spellcaster')) {
+      ev.stopImmediatePropagation();
+      ev.preventDefault();
+    }
+  }, true);
+
   // table delegate
   combatantListBody?.addEventListener('click', (e) => {
     // selection
@@ -939,9 +931,8 @@
       return;
     }
 
-
     // spell slots button (toggle inline panel)
-    const spellBtn = e.target.closest('.btn-spellcaster');
+    const spellBtn = e.target.closest('.btn-slots-inline');
     if (spellBtn) {
       const id = spellBtn.dataset.id;
       const { item } = findEntity(id);
@@ -953,7 +944,6 @@
       return;
     }
 
-    // ⬇⬇ INSERT THIS BLOCK HERE ⬇⬇
     // rejoin initiative (resurrection) button
     const rejoin = e.target.closest('.btn.btn-rejoin, .btn-rejoin');
     if (rejoin) {
@@ -966,8 +956,6 @@
       }
       return;
     }
-    // ⬆⬆ INSERT END ⬆⬆
-
 
     // image picker
     const img = e.target.closest('.editable-img');
@@ -992,96 +980,47 @@
   });
 
   // clicks inside inline slots panel
-  combatantListBody?.addEventListener('click', (e) => {
-    const slotsInline = e.target.closest('.slots-inline');
-    if (!slotsInline) return;
-
-    const ownerId = slotsInline.dataset.id;
-    const { item: c } = findEntity(ownerId);
-    if (!c) return;
+  combatantListBody.addEventListener('click', (e) => {
+    const inline = e.target.closest('.slots-inline'); if (!inline) return;
+    const { item:c } = findEntity(inline.dataset.id); if (!c) return;
     const sd = ensureSpellData(c);
 
-    // + / −
     if (e.target.classList.contains('slot-inc')) {
-      const L = parseInt(e.target.dataset.level || '0', 10);
-      if (L >= 1 && L <= 9) {
-        sd.slots[L].used = Math.max(0, sd.slots[L].used - 1);
-        syncSlotRow(slotsInline, L, sd);
-        notify();
-      }
-      return;
+      const L = +e.target.dataset.level; sd.slots[L].used = Math.max(0, sd.slots[L].used - 1);
+      syncSlotRow(inline, L, sd); notify(); return;
     }
     if (e.target.classList.contains('slot-dec')) {
-      const L = parseInt(e.target.dataset.level || '0', 10);
-      if (L >= 1 && L <= 9) {
-        sd.slots[L].used = Math.min(sd.slots[L].max, sd.slots[L].used + 1);
-        syncSlotRow(slotsInline, L, sd);
-        notify();
-      }
-      return;
+      const L = +e.target.dataset.level; sd.slots[L].used = Math.min(sd.slots[L].max, sd.slots[L].used + 1);
+      syncSlotRow(inline, L, sd); notify(); return;
     }
-
-    // Long rest
     if (e.target.classList.contains('slots-longrest')) {
-      for (let i = 1; i <= 9; i++) sd.slots[i].used = 0;
-      for (let i = 1; i <= 9; i++) syncSlotRow(slotsInline, i, sd);
-      notify();
-      return;
+      for (let L=1; L<=9; L++) sd.slots[L].used = 0;
+      for (let L=1; L<=9; L++) syncSlotRow(inline, L, sd);
+      notify(); return;
     }
-
-    // Close (hide panel, keep state)
     if (e.target.classList.contains('slots-close')) {
-      c._slotsOpen = false;
-      notify();
-      return;
+      c._slotsOpen = false; notify(); return;
     }
   });
 
-  // input changes for "Max" fields in slots
-  combatantListBody?.addEventListener('input', (e) => {
+  combatantListBody.addEventListener('input', (e) => {
     if (!e.target.classList.contains('slot-max')) return;
-    const container = e.target.closest('.slots-inline');
-    if (!container) return;
-
-    const ownerId = container.dataset.id;
-    const { item: c } = findEntity(ownerId);
-    if (!c) return;
-
+    const inline = e.target.closest('.slots-inline'); if (!inline) return;
+    const { item:c } = findEntity(inline.dataset.id); if (!c) return;
     const sd = ensureSpellData(c);
-    const L   = parseInt(e.target.dataset.level || '0', 10);
-    const val = Math.max(0, parseInt(e.target.value || '0', 10) || 0);
-
-    sd.slots[L].max  = val;
+    const L = +e.target.dataset.level;
+    const val = Math.max(0, parseInt(e.target.value||'0',10) || 0);
+    sd.slots[L].max = val;
     sd.slots[L].used = Math.min(sd.slots[L].used, val);
-    syncSlotRow(container, L, sd);
-    notify();
+    syncSlotRow(inline, L, sd); notify();
   });
 
-  // Extra guards so the tooltip never "sticks"
-  combatantListBody?.addEventListener('mouseleave', hideCondTip);   // left the whole list
-  window.addEventListener('scroll', hideCondTip, true);             // any ancestor scroll
-  document.addEventListener('keydown', e => {                       // Esc to dismiss
-    if (e.key === 'Escape') hideCondTip();
-  });
-  window.addEventListener('blur', hideCondTip);                     // tab/window loses focus
-  document.addEventListener('visibilitychange', () => {             // page hidden
-    if (document.hidden) hideCondTip();
-  });
-
-
-  function syncSlotRow(container, level, sd) {
-    const count = container.querySelector(`.slot-count[data-level="${level}"]`);
-    if (count) count.textContent = `${sd.slots[level].used}/${sd.slots[level].max}`;
-
-    const pips = container.querySelector(`.slot-pips[data-level="${level}"]`);
-    if (pips) {
-      const { max, used } = sd.slots[level];
-      const left = Math.max(0, max - used);
-      pips.setAttribute('aria-label', `${left} available, ${used} spent`);
-      pips.innerHTML = renderPips(sd, level);
-    }
+  function syncSlotRow(container, L, sd){
+    container.querySelector(`.slot-count[data-level="${L}"]`).textContent =
+      `${sd.slots[L].used}/${sd.slots[L].max}`;
+    const pips = container.querySelector(`.slot-pips[data-level="${L}"]`);
+    if (pips) pips.innerHTML = renderPips(sd, L);
   }
-
 
   // ====== SORTING ======
   function splitNameForSort(name) {
@@ -1285,7 +1224,7 @@
         <div class="cell role-cell">${c.role?.toUpperCase?.() || ''}</div>
         <div class="cell actions-cell">
           <div class="btn-group">
-            <button class="btn btn-spellcaster" data-id="${c.id}" title="Spell slots">
+            <button class="btn btn-slots-inline" data-id="${c.id}" title="Spell slots">
               ${c.spellSlots ? '🪄 Slots' : '🪄 Make Caster'}
             </button>
             ${
@@ -1302,19 +1241,17 @@
       // Append the main row
       combatantListBody.appendChild(row);
 
-      // 🔽 NEW: render the inline spell slots panel when toggled on
+      // Render the inline spell slots panel when toggled on
       if (c._slotsOpen) {
-        ensureSpellData(c);                   // make sure structure exists
+        ensureSpellData(c);
         const wrap = document.createElement('div');
         wrap.className = 'slots-inline';
         wrap.dataset.id = c.id;
-        wrap.style.gridColumn = '1 / -1';     // span full width under the row
+        wrap.style.gridColumn = '1 / -1';
         wrap.innerHTML = buildSlotsInlineHTML(c);
         combatantListBody.appendChild(wrap);
       }
     };
-
-
 
     // Paint everything
     combatants.forEach(item => {
