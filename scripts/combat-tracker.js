@@ -47,18 +47,6 @@
     notify(); // re-render rows hidden/visible without changing data
   });
 
-  // Optional bulk resurrect button (only if you add one)
-  const bulkResurrectBtn = document.querySelector('#bulk-resurrect-dead');
-  bulkResurrectBtn?.addEventListener('click', () => {
-    forEachItem(it => {
-      if (it.type === 'combatant' && (Number(it.hp) || 0) <= 0) {
-        it._out = false;
-        if (!Number(it.hp) || it.hp <= 0) it.hp = 1;
-      }
-    });
-    notify();
-  });
-
   // ====== HELPERS ======
   const uid = () => `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
@@ -152,7 +140,7 @@
       else if (item.type === 'group') (item.members || []).forEach(m => ids.push(m.id));
     });
 
-    // NEW: exclude dead/_out from initiative
+    // exclude dead/_out from initiative
     return ids.filter(id => {
       const { item } = findEntity(id);
       if (!item || item.type !== 'combatant') return false;
@@ -201,7 +189,7 @@
     notify();
   }
 
-  // ====== CONDITIONS (turn-based, time-travel safe) ======
+  // ====== CONDITIONS ======
   const CONDITION_LIST = [
     'Blinded','Charmed','Deafened','Frightened','Grappled','Incapacitated',
     'Invisible','Paralyzed','Petrified','Poisoned','Prone','Restrained',
@@ -211,7 +199,6 @@
     if (!Array.isArray(c.conditions)) c.conditions = [];
     return c.conditions;
   }
-  // Add a condition that "ticks" only at the start of the OWNER's turns.
   function addConditionToCombatant(id, name, durationRounds = 1, note = '') {
     const { item } = findEntity(id);
     if (!item || item.type !== 'combatant') return false;
@@ -222,7 +209,7 @@
       name: String(name || '').trim() || 'Condition',
       note: String(note || ''),
       appliedAtRound: currentRound,
-      appliedAtPtr: turnPtr,       // turn-index when applied
+      appliedAtPtr: turnPtr,
       durationRounds: dur
     });
     notify();
@@ -247,10 +234,6 @@
     return n;
   }
   function remainingRounds(cond) {
-    if (cond.durationRounds == null && cond.startRound != null && cond.endRound != null) {
-      if (currentRound < cond.startRound) return 0;
-      return Math.max(0, (cond.endRound - currentRound + 1));
-    }
     const used = ownerTurnsSinceAdded(cond);
     return Math.max(0, (cond.durationRounds ?? 0) - used);
   }
@@ -297,15 +280,12 @@
       if (!proposed) return false;
       if (isNameTaken(proposed, id)) return false;
     }
-
-    // NEW: if HP is being edited directly, keep _out synced
     if ('hp' in patch) {
       const nextHp = Number(patch.hp);
       if (Number.isFinite(nextHp)) {
         patch._out = (nextHp <= 0);
       }
     }
-
     Object.assign(item, patch);
     notify();
     return true;
@@ -378,15 +358,12 @@
     notify();
   }
   function removeEntity(id) {
-    // top-level combatant
     const before = combatants.length;
     combatants = combatants.filter(x => !(x.type === 'combatant' && x.id === id));
     if (combatants.length !== before) { notify(); return true; }
-    // whole group
     const beforeG = combatants.length;
     combatants = combatants.filter(x => !(x.type === 'group' && x.id === id));
     if (combatants.length !== beforeG) { notify(); return true; }
-    // a member inside groups
     let removed = false;
     combatants.forEach(g => {
       if (g.type !== 'group') return;
@@ -434,7 +411,6 @@
       item.hp = hp;
       item.tempHp = temp;
 
-      // NEW: mark out of initiative when dead; clear when above 0
       item._out = (hp <= 0);
     });
 
@@ -471,7 +447,6 @@
     clampTurnPtr();
     setRoundDisplay();
     setCurrentTurnDisplay();
-    // If DOM is about to change, make sure any floating tooltip is gone
     hideCondTip();
     render();
     updateCurrentTurnHighlight();
@@ -636,77 +611,7 @@
     if (from && !to) hideCondTip();
   });
 
-  // ====== SPELL SLOTS (inline panel under the row) ======
-  function ensureSpellData(c){
-    if (!c.spellSlots) {
-      c.spellSlots = { isSpellcaster: true, slots: {} };
-      for (let L = 1; L <= 9; L++) c.spellSlots.slots[L] = { max: 0, used: 0 };
-    }
-    return c.spellSlots;
-  }
-
-  // Inject minimal CSS once for the pips UI
-  function ensureSlotsStyles(){
-    if (document.getElementById('slots-pips-style')) return;
-    const el = document.createElement('style');
-    el.id = 'slots-pips-style';
-    el.textContent = `
-      .slots-inline .slot-row { gap:.5rem; }
-      .slots-inline .slot-pips{ display:flex; flex-wrap:wrap; gap:4px; align-items:center; margin-left:.5rem; }
-      .slots-inline .slot-pip{ width:14px; height:14px; border-radius:50%; box-sizing:border-box;
-                              border:2px solid currentColor; opacity:.35; }
-      .slots-inline .slot-pip.available{ background: currentColor; opacity: 1; }
-      .slots-inline .slot-pip.spent{ background: transparent; }
-    `;
-    document.head.appendChild(el);
-  }
-
-  function renderPips(sd, L){
-    const { max, used } = sd.slots[L];
-    const left = Math.max(0, max - used);
-    const dots = [];
-    for (let i = 0; i < left; i++) dots.push('<span class="slot-pip available" title="Available"></span>');
-    for (let i = 0; i < used; i++) dots.push('<span class="slot-pip spent" title="Spent"></span>');
-    return dots.join('');
-  }
-
-  function renderSlotsRows(c){
-    const sd = ensureSpellData(c);
-    const rows = [];
-    for (let L=1; L<=9; L++){
-      const { max, used } = sd.slots[L];
-      rows.push(`
-        <div class="slot-row" data-level="${L}" style="display:flex;align-items:center;gap:.5rem;">
-          <div style="width:2.2rem;font-weight:700;">L${L}</div>
-          <button class="slot-dec" data-level="${L}" title="Spend one">−</button>
-          <span class="slot-count" data-level="${L}" style="min-width:60px;text-align:center;">${used}/${max}</span>
-          <button class="slot-inc" data-level="${L}" title="Recover one">+</button>
-          <div class="slot-pips" data-level="${L}" aria-label="" style="flex:1;">${renderPips(sd, L)}</div>
-          <div style="margin-left:.5rem;">Max</div>
-          <input class="slot-max" data-level="${L}" type="number" min="0" step="1" value="${max}" style="width:64px;padding:.25rem .4rem;">
-        </div>`);
-    }
-    return rows.join('');
-  }
-
-  function buildSlotsInlineHTML(c){
-    ensureSlotsStyles();
-    return `
-    <div class="slots-inline-inner" style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:8px;margin-top:6px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem;">
-        <div style="font-weight:700;">🪄 Spell Slots — ${escapeHTML(c.name||'')}</div>
-        <div style="display:flex;gap:.5rem;">
-          <button class="slots-longrest">Long Rest</button>
-          <button class="slots-close">Close</button>
-        </div>
-      </div>
-      <div class="slots-body" style="display:flex;flex-direction:column;gap:.35rem;">
-        ${renderSlotsRows(c)}
-      </div>
-    </div>`;
-  }
-
-  // ====== STATUS-CELL LAYOUT (1-line until 3+ chips need wrapping) ======
+  // ====== STATUS-CELL LAYOUT ======
   function updateStatusCellLayout() {
     document
       .querySelectorAll('#combatant-list-body .tracker-table-row .status-cell')
@@ -722,7 +627,6 @@
                               + Math.max(0, chips.length - 1) * 4;
         const btnWidth = (btn?.offsetWidth || 0);
         const available = cell.clientWidth - btnWidth - 8;
-
         const needWrap = chipsTotalWidth > available;
         cell.classList.toggle('wrapped', needWrap);
       });
@@ -853,8 +757,7 @@
     document.addEventListener('click', onCondDocClick, true);
   }
 
-  // ====== EVENTS (delegated) ======
-  // header buttons
+  // ====== EVENTS ======
   addCombatantBtn?.addEventListener('click', () => addDefaultCombatant());
   addGroupBtn?.addEventListener('click', () => addGroupByName(`New Group ${allGroups().length + 1}`));
   sortAscBtn?.addEventListener('click', () => sortByInit('asc'));
@@ -881,7 +784,7 @@
 
   // table delegate
   combatantListBody?.addEventListener('click', (e) => {
-    // selection
+    // selection (works for group members as well; CSS must NOT hide this checkbox)
     const cb = e.target.closest('.combatant-checkbox');
     if (cb) {
       if (isLocked) { e.preventDefault(); return; }
@@ -937,7 +840,7 @@
       const id = spellBtn.dataset.id;
       const { item } = findEntity(id);
       if (item && item.type === 'combatant') {
-        ensureSpellData(item);
+        window.SpellUI?.ensureSpellData(item);
         item._slotsOpen = !item._slotsOpen;
         notify();
       }
@@ -951,7 +854,7 @@
       const { item } = findEntity(id);
       if (item && item.type === 'combatant') {
         item._out = false;
-        if (!Number(item.hp) || item.hp <= 0) item.hp = 1; // default 1 HP restore
+        if (!Number(item.hp) || item.hp <= 0) item.hp = 1;
         notify();
       }
       return;
@@ -983,19 +886,19 @@
   combatantListBody.addEventListener('click', (e) => {
     const inline = e.target.closest('.slots-inline'); if (!inline) return;
     const { item:c } = findEntity(inline.dataset.id); if (!c) return;
-    const sd = ensureSpellData(c);
+    const sd = window.SpellUI?.ensureSpellData(c);
 
     if (e.target.classList.contains('slot-inc')) {
       const L = +e.target.dataset.level; sd.slots[L].used = Math.max(0, sd.slots[L].used - 1);
-      syncSlotRow(inline, L, sd); notify(); return;
+      window.SpellUI?.syncSlotRow(inline, L, sd); notify(); return;
     }
     if (e.target.classList.contains('slot-dec')) {
       const L = +e.target.dataset.level; sd.slots[L].used = Math.min(sd.slots[L].max, sd.slots[L].used + 1);
-      syncSlotRow(inline, L, sd); notify(); return;
+      window.SpellUI?.syncSlotRow(inline, L, sd); notify(); return;
     }
     if (e.target.classList.contains('slots-longrest')) {
       for (let L=1; L<=9; L++) sd.slots[L].used = 0;
-      for (let L=1; L<=9; L++) syncSlotRow(inline, L, sd);
+      for (let L=1; L<=9; L++) window.SpellUI?.syncSlotRow(inline, L, sd);
       notify(); return;
     }
     if (e.target.classList.contains('slots-close')) {
@@ -1003,23 +906,22 @@
     }
   });
 
+  // update max fields in slots
   combatantListBody.addEventListener('input', (e) => {
     if (!e.target.classList.contains('slot-max')) return;
     const inline = e.target.closest('.slots-inline'); if (!inline) return;
     const { item:c } = findEntity(inline.dataset.id); if (!c) return;
-    const sd = ensureSpellData(c);
+    const sd = window.SpellUI?.ensureSpellData(c);
     const L = +e.target.dataset.level;
     const val = Math.max(0, parseInt(e.target.value||'0',10) || 0);
     sd.slots[L].max = val;
     sd.slots[L].used = Math.min(sd.slots[L].used, val);
-    syncSlotRow(inline, L, sd); notify();
+    window.SpellUI?.syncSlotRow(inline, L, sd); notify();
   });
 
-  function syncSlotRow(container, L, sd){
-    container.querySelector(`.slot-count[data-level="${L}"]`).textContent =
-      `${sd.slots[L].used}/${sd.slots[L].max}`;
-    const pips = container.querySelector(`.slot-pips[data-level="${L}"]`);
-    if (pips) pips.innerHTML = renderPips(sd, L);
+  function syncSlotInline(container, c) {
+    const html = window.SpellUI?.buildSlotsInlineHTML(c) || '';
+    container.innerHTML = html;
   }
 
   // ====== SORTING ======
@@ -1027,7 +929,7 @@
     const trimmed = String(name || '').trim();
     const m = trimmed.match(/^(.*?)(?:\s+(\d+))?$/);
     const base = (m?.[1] || '').toLowerCase();
-    const num  = m?.[2] ? parseInt(m[2], 10) : null;   // block-scoped (no accidental globals)
+    const num  = m?.[2] ? parseInt(m[2], 10) : null;
     return { base, num };
   }
   function compareNames(aName, bName, alphaDir = 'asc') {
@@ -1238,17 +1140,16 @@
         <div class="cell dashboard-link-cell"><button title="Toggle Dashboard">📄</button></div>
       `;
 
-      // Append the main row
       combatantListBody.appendChild(row);
 
-      // Render the inline spell slots panel when toggled on
+      // inline spell slots panel
       if (c._slotsOpen) {
-        ensureSpellData(c);
+        window.SpellUI?.ensureSpellData(c);
         const wrap = document.createElement('div');
         wrap.className = 'slots-inline';
         wrap.dataset.id = c.id;
         wrap.style.gridColumn = '1 / -1';
-        wrap.innerHTML = buildSlotsInlineHTML(c);
+        syncSlotInline(wrap, c);
         combatantListBody.appendChild(wrap);
       }
     };
@@ -1265,6 +1166,8 @@
   // ====== INIT ======
   setRoundDisplay();
   setCurrentTurnDisplay();
+  // Mount "PC quick add" if the module is present
+  window.PlayerStore?.mountPCQuickAdd?.();
   notify();
   window.addEventListener('resize', updateStatusCellLayout);
 })();

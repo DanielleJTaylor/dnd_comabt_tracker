@@ -1,0 +1,133 @@
+<!-- file: players.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Edit Players</title>
+  <link rel="icon" type="image/png" href="images/icon.png">
+  <style>
+    body{ font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:#faf7ef; color:#222; }
+    header{ display:flex; align-items:center; justify-content:space-between; padding:16px; }
+    main{ max-width:980px; margin:0 auto; padding:0 16px 40px; }
+    h1{ margin:0; }
+    .grid{ display:grid; gap:12px; grid-template-columns: repeat(12, 1fr); }
+    .card{ background:#fff; border:1px solid #e6dcc8; border-radius:12px; padding:14px; }
+    .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    label{ font-weight:600; }
+    input, select{ padding:6px 8px; border:1px solid #cfc3aa; border-radius:8px; min-width:0; }
+    input[type="number"]{ width:90px; }
+    .btn{ padding:8px 12px; border:1px solid #cfc3aa; border-radius:10px; background:#fff; cursor:pointer; }
+    .btn.primary{ background:#6ca05b; color:#fff; border-color:#5b8b4c; }
+    .btn.danger{ background:#d9534f; color:#fff; border-color:#bf403d; }
+    .list{ margin-top:16px; }
+    .pc{ display:grid; grid-template-columns: 60px 1fr auto; gap:12px; align-items:center; padding:10px; border-bottom:1px solid #eee; }
+    .pc img{ width:60px; height:60px; border-radius:50%; object-fit:cover; background:#f2f2f2; }
+    .pc h4{ margin:0 0 4px; }
+    .pc small{ opacity:.8; }
+    .empty{ padding:16px; text-align:center; color:#666; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🧑‍🎓 Edit Players</h1>
+    <button class="btn" onclick="location.href='view-encounters.html'">↩ Back to Encounters</button>
+  </header>
+  <main>
+    <section class="card">
+      <h3>Add Player</h3>
+      <div class="row">
+        <label>Name <input id="pc-name" placeholder="Lyra Dawn" /></label>
+        <label>Class <input id="pc-class" placeholder="Wizard 5" /></label>
+        <label>AC <input id="pc-ac" type="number" min="0" id="pc-ac" /></label>
+        <label>PPerc <input id="pc-pp" type="number" min="0" /></label>
+        <label>PIns <input id="pc-pi" type="number" min="0" /></label>
+        <label>PInv <input id="pc-pinv" type="number" min="0" /></label>
+        <label>Image <input id="pc-img" type="file" accept="image/*" /></label>
+        <button class="btn primary" id="pc-add">Add Player</button>
+      </div>
+    </section>
+
+    <section class="card list">
+      <h3>Players</h3>
+      <div id="pc-list"></div>
+    </section>
+  </main>
+
+  <script>
+    const LS_KEY = 'players_v1';
+
+    const loadPlayers = () => {
+      try { return JSON.parse(localStorage.getItem(LS_KEY)) || []; }
+      catch { return []; }
+    };
+    const savePlayers = (arr) => localStorage.setItem(LS_KEY, JSON.stringify(arr));
+
+    let players = loadPlayers();
+
+    function toDataURL(file) {
+      return new Promise((resolve,reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+    }
+
+    async function addPC() {
+      const name = document.getElementById('pc-name').value.trim();
+      const cls  = document.getElementById('pc-class').value.trim();
+      const ac   = parseInt(document.getElementById('pc-ac').value||'0',10) || 0;
+      const pp   = parseInt(document.getElementById('pc-pp').value||'0',10) || 0;
+      const pi   = parseInt(document.getElementById('pc-pi').value||'0',10) || 0;
+      const pinv = parseInt(document.getElementById('pc-pinv').value||'0',10) || 0;
+      const imgf = document.getElementById('pc-img').files[0];
+
+      if (!name) { alert('Name required'); return; }
+
+      const id = Date.now() + '-' + Math.floor(Math.random()*1e6);
+      const imageUrl = imgf ? await toDataURL(imgf) : '';
+
+      players.push({ id, name, className: cls, ac, passives:{ perception:pp, insight:pi, investigation:pinv }, imageUrl });
+      savePlayers(players);
+      renderList();
+      document.getElementById('pc-name').value = '';
+      document.getElementById('pc-class').value = '';
+      document.getElementById('pc-ac').value = '';
+      document.getElementById('pc-pp').value = '';
+      document.getElementById('pc-pi').value = '';
+      document.getElementById('pc-pinv').value = '';
+      document.getElementById('pc-img').value = '';
+    }
+
+    function removePC(id){
+      players = players.filter(p => p.id !== id);
+      savePlayers(players);
+      renderList();
+    }
+
+    function renderList(){
+      const wrap = document.getElementById('pc-list');
+      if (!players.length) {
+        wrap.innerHTML = '<div class="empty">No players yet. Add some above.</div>';
+        return;
+      }
+      wrap.innerHTML = players.map(p => `
+        <div class="pc">
+          <img src="${p.imageUrl || 'images/icon.png'}" alt="${p.name}">
+          <div>
+            <h4>${p.name}</h4>
+            <small>${p.className || ''} • AC ${p.ac} • PPerc ${p.passives.perception||0} • PIns ${p.passives.insight||0} • PInv ${p.passives.investigation||0}</small>
+          </div>
+          <div>
+            <button class="btn danger" onclick="removePC('${p.id}')">Delete</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    document.getElementById('pc-add').addEventListener('click', addPC);
+    renderList();
+  </script>
+</body>
+</html>
