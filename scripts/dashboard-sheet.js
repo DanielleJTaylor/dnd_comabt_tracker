@@ -1,11 +1,12 @@
 // scripts/dashboard-sheet.js
-// Grid editor with Interact.js + live push-down preview (no horizontal moves)
+// Grid editor with Interact.js + edge-snapped, ghost-driven live commits
 // - Hold anywhere on a block to drag (text editing disabled while moving)
 // - Bottom/right resize
-// - True push-down cascade using full-area collision checks
+// - Ghost shows target footprint; layout is COMMITTED on every move
+// - Edge-snapping: neighbors only move once you cross their borders
+// - Full-area collision checks + push-down cascade
 // - Column gravity-up (close vertical gaps without horizontal moves)
 // - Global row compaction (cut empty rows)
-// - Live preview uses the same cascade+gravity+compact as commit
 // - Undo/Redo history snapshots on successful saves
 // - Import/Export, autosave, lock toggle, image blocks
 
@@ -18,8 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const formatToolbar    = document.getElementById('format-toolbar');
   const exportBtn        = document.getElementById('export-btn');
   const saveStatusBtn    = document.getElementById('save-status-btn');
-
-  
 
   // Undo/Redo UI (inject if missing)
   let undoBtn = document.getElementById('undo-btn');
@@ -136,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
       .map(readRect);
   }
 
-  // ---------- Geometry (full-area overlap) ----------
+  // ---------- Geometry ----------
   function colsOverlap(a, b) {
     return !(a.colStart + a.colSpan <= b.colStart || b.colStart + b.colSpan <= a.colStart);
   }
@@ -147,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
     return colsOverlap(a,b) && rowsOverlap(a,b);
   }
 
-  // ---------- Push-down cascade (global, deterministic) ----------
+  // ---------- Push-down cascade ----------
   function pushDownCascadeFull(anchorRect) {
     // Start from DOM rects, replacing/adding anchor
     const rects = getAllRects(null).map(r => ({ ...r }));
@@ -203,13 +202,10 @@ document.addEventListener('DOMContentLoaded', () => {
     return placed;
   }
 
-  // ----- Cut globally empty rows (row compression) ----------------------------
-  // For every row index that NO block occupies, shift all rows below up by 1.
-  // Works on a list of rects: [{el, colStart, rowStart, colSpan, rowSpan}, ...]
+  // ----- Cut globally empty rows (row compression) -----
   function compactEmptyRows(rects) {
     if (!rects?.length) return rects;
 
-    // Build a set of occupied row indices (inclusive ranges)
     const occupied = new Set();
     let maxBottom = 0;
     for (const r of rects) {
@@ -219,7 +215,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (bot > maxBottom) maxBottom = bot;
     }
 
-    // Create a mapping from old row -> new row after removing empty rows
     let shift = 0;
     const rowMap = new Map();
     for (let y = 1; y <= maxBottom; y++) {
@@ -227,14 +222,13 @@ document.addEventListener('DOMContentLoaded', () => {
       rowMap.set(y, y - shift);
     }
 
-    // Apply the mapping to each rect's rowStart (rowSpan stays the same)
     return rects.map(r => {
       const mapped = rowMap.get(r.rowStart) ?? r.rowStart;
       return { ...r, rowStart: Math.max(1, mapped) };
     });
   }
 
-  // ----- Ensure delete button is in the top-right -----------------------------
+  // ----- Ensure delete button is in the top-right -----
   function styleDeleteButton(blockEl) {
     const btn = blockEl.querySelector('.delete-btn');
     if (!btn) return;
@@ -255,19 +249,18 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!btn.textContent.trim()) btn.textContent = '×';
   }
 
-  // ---------- Live preview ----------
+  // ---------- Ghost ----------
   function updateGhost(rect) {
     if (!ghostEl) {
       ghostEl = document.createElement('div');
       ghostEl.className = 'block-ghost';
       blocksContainer.appendChild(ghostEl);
     }
-    ghostEl.style.zIndex = '50';        // keep above blocks
+    ghostEl.style.zIndex = '50';        // keep above neighbors
     ghostEl.style.pointerEvents = 'none';
     writeRect(ghostEl, rect);
     ghostEl.style.display = '';
   }
-
   function removeGhost() {
     if (ghostEl) ghostEl.remove();
     ghostEl = null;
@@ -276,71 +269,80 @@ document.addEventListener('DOMContentLoaded', () => {
     blocksContainer.querySelectorAll('.block').forEach(el => { el.style.transform = ''; });
   }
 
-  // Live preview that treats the source as empty (so neighbors can climb up)
-  // Live preview that treats the source as empty (so neighbors can climb up)
-  function applyPreview(ghostRect, activeEl) {
-    // 0) We need the original rect to know which way we're moving
-    const startRect = JSON.parse(activeEl.getAttribute('data-start-rect') || '{}');
-
-    // 1) Build the fully packed preview
+  // ---------- Preview math (no transforms; returns the would-be layout) ----------
+  function getPreviewLayout(ghostRect, activeEl) {
     const tempAnchor = { ...ghostRect, el: activeEl };
-    const cascaded = pushDownCascadeFull(tempAnchor);
-    const packed   = gravityUpRects(cascaded, activeEl);
-    const final    = compactEmptyRows(packed);
-
-    const nextByEl = new Map(final.map(r => [r.el, r]));
-    const m = getMetrics();
-
-    // Movement direction (signs: -1, 0, +1)
-    const vdir = Math.sign((ghostRect?.rowStart || 0) - (startRect?.rowStart || 0));
-    const hdir = Math.sign((ghostRect?.colStart || 0) - (startRect?.colStart || 0));
-
-    // Ghost edges
-    const ghostTop    = ghostRect.rowStart;
-    const ghostBottom = ghostRect.rowStart + ghostRect.rowSpan - 1;
-    const ghostLeft   = ghostRect.colStart;
-    const ghostRight  = ghostRect.colStart + ghostRect.colSpan - 1;
-
-    for (const el of blocksContainer.querySelectorAll('.block')) {
-      if (el === activeEl) continue; // active is moved by drag/resize handlers
-
-      const cur = readRect(el);
-      const nxt = nextByEl.get(el);
-      if (!nxt) { el.style.transform = ''; continue; }
-
-      // Neighbor edges (current)
-      const nbTop    = cur.rowStart;
-      const nbBottom = cur.rowStart + cur.rowSpan - 1;
-      const nbLeft   = cur.colStart;
-      const nbRight  = cur.colStart + cur.colSpan - 1;
-
-      // Has the ghost "cleared" this neighbor along the axis we’re moving?
-      let cleared = true;
-
-      if (vdir > 0) {            // moving DOWN → clear when ghost top passed neighbor bottom
-        cleared = cleared && (ghostTop > nbBottom);
-      } else if (vdir < 0) {     // moving UP → clear when ghost bottom above neighbor top
-        cleared = cleared && (ghostBottom < nbTop);
-      }
-
-      if (hdir > 0) {            // moving RIGHT → clear when ghost left passed neighbor right
-        cleared = cleared && (ghostLeft > nbRight);
-      } else if (hdir < 0) {     // moving LEFT → clear when ghost right before neighbor left
-        cleared = cleared && (ghostRight < nbLeft);
-      }
-
-      if (!cleared) {
-        // Not cleared yet → keep the neighbor where it is (no preview transform)
-        el.style.transform = '';
-        continue;
-      }
-
-      // Cleared → show where it will go in the packed preview
-      const dy = (nxt.rowStart - cur.rowStart) * (m.rowUnit + m.gap);
-      el.style.transform = dy ? `translateY(${dy}px)` : '';
-    }
+    const cascaded  = pushDownCascadeFull(tempAnchor);
+    const packed    = gravityUpRects(cascaded, activeEl);
+    const final     = compactEmptyRows(packed);
+    return final;
   }
 
+  // ---------- Edge snapping ----------
+  // Neighbors only move once you cross their borders. We adjust the ghost so that
+  // it "sticks" against edges until you clearly pass them.
+  function edgeSnap(ghost, activeEl /*, startRect */) {
+    const all = getAllRects(activeEl);
+    if (!all.length) return ghost;
+
+    const gLeft   = ghost.colStart;
+    const gRight  = ghost.colStart + ghost.colSpan - 1;
+    const gTop    = ghost.rowStart;
+    const gBottom = ghost.rowStart + ghost.rowSpan - 1;
+
+    let snapped = { ...ghost };
+
+    for (const r of all) {
+      const rLeft   = r.colStart;
+      const rRight  = r.colStart + r.colSpan - 1;
+      const rTop    = r.rowStart;
+      const rBottom = r.rowStart + r.rowSpan - 1;
+
+      // Snap vertically: if overlapping columns and we're near their top/bottom edge
+      const overlapCols = !(gRight < rLeft || gLeft > rRight);
+
+      if (overlapCols) {
+        // Hover just above bottom until you clearly go below
+        if (gTop >= rTop && gTop <= rBottom) {
+          // keep top "stuck" to rBottom+1 until you pass it
+          if (gTop <= rBottom) {
+            snapped.rowStart = Math.max(snapped.rowStart, rBottom + 1);
+          }
+        }
+        // Hover just below top until you clearly go above
+        if (gBottom >= rTop && gBottom <= rBottom) {
+          if (gBottom >= rTop) {
+            snapped.rowStart = Math.min(snapped.rowStart, rTop - ghost.rowSpan);
+          }
+        }
+      }
+
+      // Snap horizontally: if overlapping rows and we're near their left/right edge
+      const overlapRows = !(gBottom < rTop || gTop > rBottom);
+
+      if (overlapRows) {
+        // keep left "stuck" to rRight+1 until you pass it
+        if (gLeft >= rLeft && gLeft <= rRight) {
+          if (gLeft <= rRight) {
+            snapped.colStart = Math.max(snapped.colStart, rRight + 1);
+          }
+        }
+        // keep right "stuck" to rLeft-1 until you pass it
+        if (gRight >= rLeft && gRight <= rRight) {
+          if (gRight >= rLeft) {
+            snapped.colStart = Math.min(snapped.colStart, rLeft - ghost.colSpan);
+          }
+        }
+      }
+    }
+
+    // clamp to grid
+    const m = getMetrics();
+    snapped.colStart = Math.max(1, Math.min(snapped.colStart, m.cols - snapped.colSpan + 1));
+    snapped.rowStart = Math.max(1, snapped.rowStart);
+
+    return snapped;
+  }
 
   // ---------- Image blocks ----------
   function fileToDataUrl(file) {
@@ -612,7 +614,7 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     writeRect(block, rect);
     blocksContainer.appendChild(block);
-    styleDeleteButton(block);                 // ensure top-right
+    styleDeleteButton(block);
     bindBlockEvents(block);
     block.querySelector('.block-content').focus();
 
@@ -640,7 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     writeRect(el, { colStart: b.colStart, rowStart: b.rowStart, colSpan: b.colSpan, rowSpan: b.rowSpan });
     blocksContainer.appendChild(el);
-    styleDeleteButton(el);                   // ensure top-right
+    styleDeleteButton(el);
 
     if (b.type === 'image') {
       makeImageBlock(el, b.src || '');
@@ -684,26 +686,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const content = el.querySelector('.block-content');
 
     if (!isLocked) {
-      // inside bindBlockEvents(el) ...
       interact(el)
         .draggable({
           hold: 220,
           allowFrom: el,
           ignoreFrom: 'button,.resize-handle,.delete-btn',
           listeners: {
-            // DRAG start
             start: e => {
               beginInteractionSelectionGuard();
               disableEditing(e.target);
               e.target.classList.add('dragging-active');
-              e.target.style.zIndex = '60';             // raise above neighbors/ghost
+              e.target.style.zIndex = '60';  // raise above neighbors/ghost
               e.target.setAttribute('data-start-rect', JSON.stringify(readRect(e.target)));
-              updateGhost(readRect(e.target));
+              updateGhost(readRect(e.target)); // starting ghost
             },
             move: dragMove,
             end: e => {
               endInteractionSelectionGuard();
-              // remove the stored start rect now that we're done
               e.target.removeAttribute('data-start-rect');
               dragEnd(e);
             }
@@ -712,7 +711,6 @@ document.addEventListener('DOMContentLoaded', () => {
         .resizable({
           edges: { top: false, left: false, right: true, bottom: true, bottomRight: true },
           listeners: {
-            // RESIZE start
             start: e => {
               beginInteractionSelectionGuard();
               disableEditing(e.target);
@@ -729,7 +727,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           }
         });
-
 
       el.querySelector('.delete-btn')?.addEventListener('click', () => {
         el.remove();
@@ -795,136 +792,100 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // --- drag/resize listeners ---
-  // --- DRAG / RESIZE LISTENERS ---
-  // --- drag/resize preview with ghost-driven pushdown and active-block follow ---
-
-  let _rafToken = null;
-  function withRaf(fn) {
-    if (_rafToken) return;
-    _rafToken = requestAnimationFrame(() => {
-      _rafToken = null;
-      fn();
-    });
-  }
-
+  // ---------- DRAG / RESIZE LISTENERS (live commit, edge-snapped) ----------
   function dragMove(e) {
     const m = getMetrics();
     const start = JSON.parse(e.target.getAttribute('data-start-rect'));
-
     const dx = e.pageX - e.x0;
     const dy = e.pageY - e.y0;
 
     const colShift = Math.round(dx / (m.cellW + m.gap));
     const rowShift = Math.round(dy / (m.rowUnit + m.gap));
 
-    const ghost = {
+    let ghost = {
       ...start,
       colStart: Math.max(1, Math.min(start.colStart + colShift, m.cols - start.colSpan + 1)),
       rowStart: Math.max(1, start.rowStart + rowShift)
     };
 
-    withRaf(() => {
-      // 1) Draw/position ghost
-      updateGhost(ghost);
+    // Edge-snap: neighbors only move once borders are crossed
+    ghost = edgeSnap(ghost, e.target);
 
-      // 2) Preview pushdown *around the ghost rect*
-      applyPreview(ghost, e.target);
+    // Visual ghost
+    updateGhost(ghost);
 
-      // 3) Move the actual block to where the ghost is (visual follow)
-      const cur = readRect(e.target);
-      const tx = (ghost.colStart - cur.colStart) * (m.cellW + m.gap);
-      const ty = (ghost.rowStart - cur.rowStart) * (m.rowUnit + m.gap);
-      e.target.style.transform = `translate(${tx}px, ${ty}px)`;
-    });
+    // Compute layout with the ghost anchor and COMMIT it immediately
+    const layout = getPreviewLayout(ghost, e.target);
+    writeRectsToDOM(layout);
+
+    // Refresh baseline so we no longer compare to old place
+    const now = readRect(e.target);
+    e.target.setAttribute('data-start-rect', JSON.stringify(now));
+
+    requestSave(); // throttled
   }
-
 
   function dragEnd(e) {
     e.target.classList.remove('dragging', 'dragging-active');
     restoreEditing(e.target);
 
-    const final = ghostEl ? readRect(ghostEl) : null;
     removeGhost();
     clearPreviewTransforms();
     e.target.style.transform = '';
     e.target.removeAttribute('data-start-rect');
+    e.target.style.opacity = '';
+    e.target.style.zIndex = ''; // reset
 
-    // ⬇️ Put the reset here
-    e.target.style.zIndex = '';
-
-    if (!final) return;
-
-    const anchor = { ...final, el: e.target };
-    const layout = compactEmptyRows(
-                    gravityUpRects(
-                      pushDownCascadeFull(anchor),
-                      e.target
-                    )
-                  );
+    // Optional final normalize
+    const cur = readRect(e.target);
+    const layout = getPreviewLayout(cur, e.target);
     writeRectsToDOM(layout);
+
     requestSave();
   }
-  
 
   function resizeMove(e) {
     const m = getMetrics();
     const start = JSON.parse(e.target.getAttribute('data-start-rect'));
-    const ghost = { ...start };
+    let ghost = { ...start };
 
     if (e.edges.right)  ghost.colSpan = Math.max(1, Math.round(e.rect.width  / (m.cellW + m.gap)));
     if (e.edges.bottom) ghost.rowSpan = Math.max(1, Math.round(e.rect.height / (m.rowUnit + m.gap)));
 
-    // Clamp span to grid width
     if (ghost.colStart + ghost.colSpan - 1 > m.cols) {
       ghost.colSpan = m.cols - ghost.colStart + 1;
     }
 
-    withRaf(() => {
-      // 1) Draw ghost with new size
-      updateGhost(ghost);
+    ghost = edgeSnap(ghost, e.target);
 
-      // 2) Preview pushdown around the *resized* ghost
-      applyPreview(ghost, e.target);
+    updateGhost(ghost);
 
-      // 3) Move/scale the active block visually to match the ghost footprint
-      const cur = readRect(e.target);
-      const tx = (ghost.colStart - cur.colStart) * (m.cellW + m.gap);
-      const ty = (ghost.rowStart - cur.rowStart) * (m.rowUnit + m.gap);
-      e.target.style.transform = `translate(${tx}px, ${ty}px)`;
-      // We don't try to scale the grid cell; transform is enough for preview.
-    });
+    const layout = getPreviewLayout(ghost, e.target);
+    writeRectsToDOM(layout);
+
+    const now = readRect(e.target);
+    e.target.setAttribute('data-start-rect', JSON.stringify(now));
+
+    requestSave();
   }
-
 
   function resizeEnd(e) {
     e.target.classList.remove('resizing', 'resizing-active');
     restoreEditing(e.target);
 
-    const final = ghostEl ? readRect(ghostEl) : null;
     removeGhost();
     clearPreviewTransforms();
     e.target.style.transform = '';
     e.target.removeAttribute('data-start-rect');
+    e.target.style.opacity = '';
+    e.target.style.zIndex = ''; // reset
 
-    // ⬇️ Put the reset here
-    e.target.style.zIndex = '';
-
-    if (!final) return;
-
-    const anchor = { ...final, el: e.target };
-    const layout = compactEmptyRows(
-                    gravityUpRects(
-                      pushDownCascadeFull(anchor),
-                      e.target
-                    )
-                  );
+    const cur = readRect(e.target);
+    const layout = getPreviewLayout(cur, e.target);
     writeRectsToDOM(layout);
+
     requestSave();
   }
-
-
-
 
   // ---------- Lock/UI ----------
   function setInteractivityEnabled(enabled) {

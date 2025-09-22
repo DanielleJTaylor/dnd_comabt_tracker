@@ -342,15 +342,16 @@ body {
 
 
 
+/* Keep the ghost fully readable */
+.block-ghost {
+  opacity: 0.0.60;
+}
 
 /* Make the real block see-through during drag/resize so the ghost is visible */
 .block.dragging-active,
 .block.resizing-active {
-  opacity: 1;         /* tweak to taste: 0.45–0.7 is a good range */
+  opacity: 0.40;         /* tweak to taste: 0.45–0.7 is a good range */
   transition: opacity .05s ease;
 }
 
-/* Keep the ghost fully readable */
-.block-ghost {
-  opacity: 0.35;
-}
+
